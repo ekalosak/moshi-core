@@ -1,0 +1,69 @@
+[project]
+name = "moshi-core"
+version = "23.8.23"
+description = "Moshi is a spoken language tutor."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "Proprietary"}
+keywords = ["language", "ai", "moshi"]
+authors = [
+  {name = "Eric Kalosa-Kenyon", email = "moshi.feedback@gmail.com"}
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Education",
+  "Intended Audience :: End Users/Desktop",
+  "Topic :: Education",
+]
+dependencies = [
+  "aiohttp",
+  "aiohttp_session",
+  "av",
+  "fastapi",
+  "firebase_admin",
+  "google-auth",
+  "google-cloud-firestore",
+  "google-cloud-logging",
+  "google-cloud-translate",
+  "google-cloud-texttospeech",
+  "google-cloud-secret-manager",
+  "loguru",
+  "numpy",
+  "openai",
+]
+
+[project.optional-dependencies]
+server = [
+  'gunicorn',
+  'uvicorn[standard]',
+]
+tests = [
+  'httpx',
+  'pytest',
+  'pytest-asyncio',
+  'pytest-aiohttp',
+  'pytest-cov',
+]
+dev = [
+  'black',
+  'flake8',
+  'isort',
+]
+
+[project.urls]
+Homepage = "https://www.chatmoshi.com"
+Repository = git@github.com:ekalosak/moshi-core.git"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+  "slow: runs more than a second or two to run",
+  "openai: access to the _paid_ OpenAI APIs",
+  "gcloud: access to the _paid_ Google Cloud APIs",
+  "asyncio: uses async and await",
+  "frontend: uses selenium and various web drivers to test web frontend",
+]
+# addopts = [
+#   "--cov=moshi"
+# ]
