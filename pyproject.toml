@@ -37,8 +37,6 @@ dependencies = [
 tests = [
   "httpx",
   "pytest",
-  "pytest-asyncio",
-  "pytest-aiohttp",
   "pytest-cov",
 ]
 dev = [
@@ -54,7 +52,6 @@ Repository = "https://github.com/ekalosak/moshi-core.git"
 
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 markers = [
   "slow: runs more than a second or two to run",
   "oai: OpenAI APIs ($)",

@@ -15,7 +15,7 @@ logger.info(f"OPENAI_APIKEY_SECRET={OPENAI_APIKEY_SECRET} SECRET_TIMEOUT={SECRET
 client = secretmanager.SecretManagerServiceAsyncClient()
 logger.success("Secrets module loaded.")
 
-functools.lru_cache(maxsize=8)
+# functools.lru_cache(maxsize=8)
 async def get_secret(
     secret_id: str,
     project_id=GOOGLE_PROJECT,

@@ -1,9 +1,11 @@
-""" This module abstracts specific chatbot implementations for use in the ChitChat app. """
-import os
-import re
+"""This module creates completions from the OpenAI API.
+The main function is `from_assistant()`.
+"""
 from dataclasses import asdict
 from enum import Enum
+import os
 from pprint import pformat
+import re
 from typing import NewType
 
 import openai
@@ -15,10 +17,9 @@ from moshi.utils import secrets
 OPENAI_COMPLETION_MODEL = Model(
     os.getenv("OPENAI_COMPLETION_MODEL", "text-davinci-002")
 )
-logger.info(f"Using completion model: {OPENAI_COMPLETION_MODEL}")
+logger.info(f"OPENAI_COMPLETION_MODEL={OPENAI_COMPLETION_MODEL}")
 
-logger.success("Loaded!")
-
+logger.success("Loaded completion module.")
 
 def _get_type_of_model(model: Model) -> ModelType:
     """Need to know the type of model for endpoint compatibility.
@@ -138,8 +139,8 @@ async def _completion(
     return msg_contents
 
 
-async def completion_from_assistant(
-    messages: list[Message],
+async def from_assistant(
+    messages: Message | list[Message],
     n: int = 1,
     model=Model.TEXTDAVINCI002,
     user: str | None = None,
@@ -152,6 +153,8 @@ async def completion_from_assistant(
     Details on args:
         https://platform.openai.com/docs/api-reference/chat/create
     """
+    if isinstance(messages, Message):
+        messages = [messages]
     assert n > 0 and isinstance(n, int)
     if n > 1:
         logger.warning(f"Generating many responses at once can be costly: n={n}")
