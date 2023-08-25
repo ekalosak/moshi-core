@@ -1,17 +1,17 @@
 """ This module provide audio processing utilities. """
-import io
-import os
-import tempfile
+from pathlib import Path
+from textwrap import shorten
 
 import av
 import numpy as np
-from av import AudioFifo, AudioFormat, AudioFrame, AudioLayout, AudioResampler
+from av import AudioFifo, AudioFormat, AudioFrame, AudioLayout
 from loguru import logger
 
+# defaults
 SAMPLE_RATE = 48000
 AUDIO_FORMAT = "s16"
 AUDIO_LAYOUT = "stereo"
-logger.info(f"AUDIO_FORMAT={AUDIO_FORMAT} AUDIO_LAYOUT={AUDIO_LAYOUT} SAMPLE_RATE={SAMPLE_RATE}")
+logger.info(f"Audio defaults: {SAMPLE_RATE}Hz {AUDIO_FORMAT} {AUDIO_LAYOUT}")
 
 logger.success("Loaded!")
 
@@ -76,17 +76,41 @@ def load_wav_to_buffer(fp: str) -> AudioFifo:
     return fifo
 
 
-def load_wav_to_audio_frame(fp: str) -> AudioFrame:
-    frame = load_wav_to_buffer(fp).read()
-    res = make_resampler()
-    return res.resample(frame)[0]
-
-
-def wav_bytes_to_audio_frame(wav: bytes) -> AudioFrame:
-    _, fp = tempfile.mkstemp()
-    try:
-        write_bytes_to_wav_file(fp, wav)
-        af = load_wav_to_audio_frame(fp)
-    finally:
-        os.remove(fp)
+def wavb2af(wav: bytes) -> AudioFrame:
+    """Parse wav file format, returning an AudioFrame of the body."""
+    # https://docs.fileformat.com/audio/wav/
+    logger.debug(f"len(wav)={len(wav)}")
+    assert isinstance(wav, bytes)
+    assert len(wav) > 0, "Empty wav file."
+    header, body = wav[0:44], wav[44:]
+    logger.debug(f"len(body)={len(body)}")
+    # validate header
+    assert header.startswith(b"RIFF"), "Invalid wav header."
+    assert int.from_bytes(header[4:8], "little") == len(wav) - 8, "File size mismatch, header invalid."
+    assert header[8:12] == b"WAVE", "Invalid wav header."
+    assert header[12:16] == b"fmt ", "Invalid wav header."
+    fmt_len = int.from_bytes(header[16:20], "little")
+    assert fmt_len == 16, "Only PCM format is supported."
+    channels = int.from_bytes(header[22:24], "little")
+    sample_rate = int.from_bytes(header[24:28], "little")
+    bits_per_sample = int.from_bytes(header[34:36], "little")
+    # sample_format = f'flt{bits_per_sample}'  # 'flt32' for 32-bit floating-point samples
+    # audio_format = av.AudioFormat(sample_rate=sample_rate, layout=f'stereo{channels}', format=sample_format)
+    assert channels in [1, 2], "Only mono and stereo wav files are supported."
+    assert header[36:40] == b"data"
+    data_size = int.from_bytes(header[40:44], "little")
+    assert len(body) > 0, "Empty wav body."
+    assert len(body) % 8 == 0
+    arr = np.frombuffer(body, dtype=np.float32)
+    arr = arr.reshape(channels, -1)
+    layout = 'stereo' if channels == 2 else 'mono'
+    logger.debug(f"channels={channels} sample_rate={sample_rate} bit_per_sample={bits_per_sample} data_size={data_size}")
+    # afmt = av.AudioFormat(sample_rate=sample_rate, layout=f'stereo{channels}', format=sample_format)
+    af = AudioFrame.from_ndarray(arr, format=AUDIO_FORMAT, layout=layout)
+    logger.debug(f"af={af}")
     return af
+
+def wav2af(waf: Path) -> AudioFrame:
+    with open(waf, "rb") as f:
+        wav = f.read()
+    return wavb2af(wav)
