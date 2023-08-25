@@ -30,21 +30,21 @@ dependencies = [
   "google-cloud-secret-manager",
   "loguru",
   "numpy",
-  "openai
+  "openai",
 ]
 
 [project.optional-dependencies]
 tests = [
-  'httpx',
-  'pytest',
-  'pytest-asyncio',
-  'pytest-aiohttp',
-  'pytest-cov',
+  "httpx",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-aiohttp",
+  "pytest-cov",
 ]
 dev = [
-  'black',
-  'flake8',
-  'isort',
+  "black",
+  "flake8",
+  "isort",
   "pyfiglet"
 ]
 
@@ -57,9 +57,9 @@ Repository = "https://github.com/ekalosak/moshi-core.git"
 asyncio_mode = "auto"
 markers = [
   "slow: runs more than a second or two to run",
-  "openai: access to the _paid_ OpenAI APIs",
-  "gcloud: access to the _paid_ Google Cloud APIs",
-  "asyncio: uses async and await",
+  "oai: OpenAI APIs ($)",
+  "gcp: Google Cloud APIs ($)",
+  "aio: uses asyncio, async and await",
 ]
 # addopts = [
 #   "--cov=moshi"

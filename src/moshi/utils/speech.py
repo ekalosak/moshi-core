@@ -1,3 +1,6 @@
+"""This module provides speech synthesis and transcription utilities.
+The main entrypoint is `synthesize` which takes a string and returns an AudioFrame.
+"""
 import asyncio
 import os
 import textwrap
@@ -13,15 +16,13 @@ from . import audio
 from moshi.utils import secrets
 
 GOOGLE_SPEECH_SYNTHESIS_TIMEOUT = int(os.getenv("GOOGLE_SPEECH_SYNTHESIS_TIMEOUT", 5))
-logger.info(f"Using speech synth timeout: {GOOGLE_SPEECH_SYNTHESIS_TIMEOUT}")
 GOOGLE_VOICE_SELECTION_TIMEOUT = int(os.getenv("GOOGLE_VOICE_SELECTION_TIMEOUT", 5))
-logger.info(f"Using language detection timeout: {GOOGLE_VOICE_SELECTION_TIMEOUT}")
 OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
-logger.info(f"Using transcription model: {OPENAI_TRANSCRIPTION_MODEL}")
+logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT} OPENAI_TRANSCRIPTION_MODEL={OPENAI_TRANSCRIPTION_MODEL}")
 
 client = texttospeech.TextToSpeechClient()
 
-logger.success("Loaded!")
+logger.success("Loaded speech module.")
 
 def gender_match(g1: str, g2: 'SsmlVoiceGender') -> bool:
     if g1.lower() == "female" and g2 == 2:
@@ -103,6 +104,7 @@ async def _synthesize_speech_bytes(text: str, voice: Voice, rate: int = 24000) -
 async def synthesize(text: str, voice: Voice, rate: int = 24000) -> AudioFrame:
     audio_bytes = await _synthesize_speech_bytes(text, voice, rate)
     assert isinstance(audio_bytes, bytes)
+    breakpoint()
     audio_frame = audio.wav_bytes_to_audio_frame(audio_bytes)
     assert isinstance(audio_frame, AudioFrame)
     return audio_frame
