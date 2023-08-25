@@ -30,14 +30,10 @@ dependencies = [
   "google-cloud-secret-manager",
   "loguru",
   "numpy",
-  "openai"
+  "openai
 ]
 
 [project.optional-dependencies]
-server = [
-  'gunicorn',
-  'uvicorn[standard]',
-]
 tests = [
   'httpx',
   'pytest',
@@ -64,7 +60,6 @@ markers = [
   "openai: access to the _paid_ OpenAI APIs",
   "gcloud: access to the _paid_ Google Cloud APIs",
   "asyncio: uses async and await",
-  "frontend: uses selenium and various web drivers to test web frontend",
 ]
 # addopts = [
 #   "--cov=moshi"

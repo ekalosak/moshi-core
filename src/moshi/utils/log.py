@@ -6,14 +6,19 @@ from google.cloud import logging
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 
+LOG_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
+
+ENV = os.getenv("ENV", "dev")
 LOG_LEVEL = os.getenv("MLOGLEVEL", "DEBUG")
-FILE_LOGS = int(os.getenv("MOSHILOGDISK", 0))
-STDOUT_LOGS = int(os.getenv("MOSHILOGSTDOUT", 1))
-CLOUD_LOGS = int(os.getenv("MOSHILOGCLOUD", 0))
+FILE_LOGS = int(os.getenv("MLOGDISK", 0))
+STDOUT_LOGS = int(os.getenv("MLOGSTDOUT", 1))
+CLOUD_LOGS = int(os.getenv("MLOGCLOUD", 0))
+logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} FILE_LOGS={FILE_LOGS} STDOUT_LOGS={STDOUT_LOGS} CLOUD_LOGS={CLOUD_LOGS}")
 
 if STDOUT_LOGS:
     import pyfiglet
 
+logger.success("Logging configured.")
 
 def _gcp_log_severity_map(level: str) -> str:
     """Convert loguru custom levels to GCP allowed severity level.
@@ -23,12 +28,11 @@ def _gcp_log_severity_map(level: str) -> str:
     match level:
         case "SUCCESS":
             return "INFO"
-        case "INSTRUCTION":
-            return "DEBUG"
-        case "TRANSCRIPT":
-            return "INFO"
         case "TRACE":
-            return "DEBUG"
+            if ENV == "dev":
+                return "DEBUG"
+            else:
+                return "INFO"
         case _:
             return level
 
@@ -62,7 +66,6 @@ def _to_log_dict(rec: dict) -> dict:
 
 def setup_loguru():
     logger.remove()
-    log_format = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
     logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
     print(f"Logging configuration: LEVEL={LOG_LEVEL} STDOUT={STDOUT_LOGS}, FILE={FILE_LOGS}, CLOUD={CLOUD_LOGS}")
     if STDOUT_LOGS:
@@ -71,7 +74,7 @@ def setup_loguru():
             diagnose=True,
             sink=sys.stderr,
             level=LOG_LEVEL,
-            format=log_format,
+            format=LOG_FORMAT,
             colorize=True,
         )
         logger.warning("Logging to stdout, including diagnostics.")
@@ -80,7 +83,7 @@ def setup_loguru():
         logger.add(
             "logs/server.log",
             level=LOG_LEVEL,
-            format=log_format,
+            format=LOG_FORMAT,
             rotation="10 MB",
         )
     # Google logging  (https://github.com/Delgan/loguru/issues/789)

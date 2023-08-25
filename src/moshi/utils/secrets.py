@@ -1,48 +1,29 @@
 import asyncio
 import contextvars
+import functools
 import os
 
 from google.cloud import secretmanager
 from loguru import logger
 import openai
 
-from moshi.utils import gcloud
+from moshi import GOOGLE_PROJECT
 
 SECRET_TIMEOUT = os.getenv("MOSHISECRETTIMEOUT", 2)
-logger.info(f"Using SECRET_TIMEOUT={SECRET_TIMEOUT}")
 OPENAI_APIKEY_SECRET = os.getenv("OPENAI_APIKEY_SECRET", "openai-apikey-0")
 logger.info(f"Using API key from: {OPENAI_APIKEY_SECRET}")
 
-gsecretclient = contextvars.ContextVar("gsecretclient")
+client = secretmanager.SecretManagerServiceAsyncClient()
+logger.success("Secrets module loaded.")
 
-
-def _setup_client():
-    """Set the gtransclient ContextVar."""
-    try:
-        gsecretclient.get()
-        logger.debug("Secretmanager client already exists.")
-    except LookupError:
-        logger.debug("Creating secretmanager client...")
-        client = secretmanager.SecretManagerServiceAsyncClient()
-        gsecretclient.set(client)
-        logger.info(f"Secretmanager client initialized.")
-
-
-def _get_client() -> secretmanager.SecretManagerServiceAsyncClient:
-    """Get the secrets-manager client."""
-    _setup_client()
-    return gsecretclient.get()
-
-
-# TODO this should be a singularly cached function (secrets don't turn over that fast)
+functools.lru_cache(maxsize=8)
 async def get_secret(
     secret_id: str,
-    project_id=gcloud.GOOGLE_PROJECT,
+    project_id=GOOGLE_PROJECT,
     version_id: str | None = None,
     decode: str | None = "UTF-8",
 ) -> str | bytes:
     """Get a secret from the secrets-manager. If version is None, get latest."""
-    client = _get_client()
     logger.debug(f"Getting secret: {secret_id}")
     version_id = version_id or "latest"
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
