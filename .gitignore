@@ -1,0 +1,8 @@
+build/
+dist/
+logs/
+htmlcov/
+.coverage
+*.egg-info/
+*.pyc
+*.log
