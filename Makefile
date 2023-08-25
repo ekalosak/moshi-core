@@ -16,7 +16,7 @@ build-install:
 	PIP_NO_INPUT=1 pip install build twine
 	@echo "📦✅ Installed."
 
-build: build-install
+build: auth-install build-install
 	@echo "🏗 Building Python3 package..."
 	rm -rf dist 2>/dev/null
 	PIP_NO_INPUT=1 python -m build
