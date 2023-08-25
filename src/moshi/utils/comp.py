@@ -1,8 +1,6 @@
 """This module creates completions from the OpenAI API.
 The main function is `from_assistant()`.
 """
-from dataclasses import asdict
-from enum import Enum
 import os
 from pprint import pformat
 import re
@@ -18,6 +16,9 @@ OPENAI_COMPLETION_MODEL = Model(
     os.getenv("OPENAI_COMPLETION_MODEL", "text-davinci-002")
 )
 logger.info(f"OPENAI_COMPLETION_MODEL={OPENAI_COMPLETION_MODEL}")
+
+ChatCompletionPayload = NewType("ChatCompletionPayload", list[dict[str, str]])
+CompletionPayload = NewType("CompletionPayload", str)
 
 logger.success("Loaded completion module.")
 
@@ -46,10 +47,6 @@ def _clean_completion(msg: str) -> str:
         logger.trace("Regex did not match.")
         result = msg
     return result
-
-
-ChatCompletionPayload = NewType("ChatCompletionPayload", list[dict[str, str]])
-CompletionPayload = NewType("CompletionPayload", str)
 
 
 def _chat_completion_payload_from_messages(
@@ -91,7 +88,7 @@ def _completion_payload_from_messages(messages: list[Message]) -> CompletionPayl
     return payload
 
 async def _chat_completion(
-    payload: ChatCompletionPayload, n: int, model: Model, user: str | None = None, **kwargs
+    payload: ChatCompletionPayload, n: int, model: Model, **kwargs
 ) -> list[str]:
     """Get the message"""
     msg_contents = []
@@ -100,7 +97,6 @@ async def _chat_completion(
         model=model,
         messages=payload,
         n=n,
-        user=user,
         **kwargs,
     )
     logger.debug(f"response:\n{pformat(response)}")
@@ -115,7 +111,7 @@ async def _chat_completion(
 
 
 async def _completion(
-    payload: CompletionPayload, n: int, model: Model, user: str | None = None, **kwargs
+    payload: CompletionPayload, n: int, model: Model, **kwargs
 ) -> list[str]:
     assert _get_type_of_model(model) == ModelType.COMP
     msg_contents = []
@@ -123,7 +119,6 @@ async def _completion(
         model=model,
         prompt=payload,
         n=n,
-        user=user,
         **kwargs,
     )
     logger.debug(f"response:\n{pformat(response)}")
@@ -160,12 +155,14 @@ async def from_assistant(
         logger.warning(f"Generating many responses at once can be costly: n={n}")
     await secrets.login_openai()
     msg_contents = []
+    if user:
+        kwargs["user"] = user
     if _get_type_of_model(model) == ModelType.CHAT:
         payload = _chat_completion_payload_from_messages(messages)
-        msg_contents = await _chat_completion(payload, n, model, user, **kwargs)
+        msg_contents = await _chat_completion(payload, n, model, **kwargs)
     elif _get_type_of_model(model) == ModelType.COMP:
         payload = _completion_payload_from_messages(messages)
-        msg_contents = await _completion(payload, n, model, user, **kwargs)
+        msg_contents = await _completion(payload, n, model, **kwargs)
     else:
         raise TypeError(f"Model not supported: {model}")
     assert isinstance(msg_contents, list)
