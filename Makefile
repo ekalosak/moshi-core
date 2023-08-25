@@ -1,7 +1,6 @@
 .PHONY: auth build cycle dev publish publish-nobump publish-nobump-nobuild precheck
 # Source: https://web.mit.edu/gnu/doc/html/make_6.html
 
-GOOGLE_CLOUD_PROJECT = moshi-3
 GOOGLE_CLOUD_PYPI_URL = https://us-central1-python.pkg.dev/moshi-3/pypi/
 
 auth:
@@ -16,7 +15,7 @@ build-install:
 	PIP_NO_INPUT=1 pip install build twine
 	@echo "📦✅ Installed."
 
-build: auth-install build-install
+build:
 	@echo "🏗 Building Python3 package..."
 	rm -rf dist 2>/dev/null
 	PIP_NO_INPUT=1 python -m build
@@ -49,6 +48,9 @@ precheck:
 	@test -n "$GOOGLE_SDK_ROOT" \
         && echo "✅ GOOGLE_SDK_ROOT present in env" \
         || echo "❌ GOOGLE_SDK_ROOT missing in env"
+
+setup: auth-install build-install
+	@echo "🧰 Setup complete."
 
 test:
 	@echo "🧪 Running tests..."
