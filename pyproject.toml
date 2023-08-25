@@ -53,7 +53,8 @@ dev = [
 
 [project.urls]
 Homepage = "https://www.chatmoshi.com"
-Repository = git@github.com:ekalosak/moshi-core.git"
+Repository = "https://github.com/ekalosak/moshi-core.git"
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
