@@ -3,7 +3,7 @@
 # Install
 ```
 pip install moshi-core \
-    -i https://us-central1-python.pkg.dev/moshi-3/pypi/simple
+    --extra-index-url https://us-central1-python.pkg.dev/moshi-3/pypi/simple
 ```
 
 # Develop
