@@ -4,7 +4,6 @@
 #     - String similarity
 
 import asyncio
-import contextvars
 import textwrap
 from difflib import SequenceMatcher
 
