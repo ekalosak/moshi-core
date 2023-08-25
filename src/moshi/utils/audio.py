@@ -86,9 +86,10 @@ def wavb2af(wav: bytes) -> AudioFrame:
     with logger.contextualize(sample_rate=sample_rate, samples=samples, channels=channels, layout=layout, planar=format.is_planar):
         try:
             af = AudioFrame.from_ndarray(arr.ravel().reshape(1, -1), format='s16', layout=layout)
-            logger.debug(f"af={af}")
         except:
             logger.error(f"Failed to create AudioFrame from wav bytes (as hex): {shorten(wav.hex(), 100)}")
+    af.rate = sample_rate
+    logger.debug(f"af={af}")
     return af
 
 def wav2af(waf: Path) -> AudioFrame:
