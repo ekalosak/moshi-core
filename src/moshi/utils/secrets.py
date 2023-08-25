@@ -1,5 +1,4 @@
 import asyncio
-import contextvars
 import functools
 import os
 
@@ -11,7 +10,7 @@ from moshi import GOOGLE_PROJECT
 
 SECRET_TIMEOUT = os.getenv("MOSHISECRETTIMEOUT", 2)
 OPENAI_APIKEY_SECRET = os.getenv("OPENAI_APIKEY_SECRET", "openai-apikey-0")
-logger.info(f"Using API key from: {OPENAI_APIKEY_SECRET}")
+logger.info(f"OPENAI_APIKEY_SECRET={OPENAI_APIKEY_SECRET} SECRET_TIMEOUT={SECRET_TIMEOUT}")
 
 client = secretmanager.SecretManagerServiceAsyncClient()
 logger.success("Secrets module loaded.")

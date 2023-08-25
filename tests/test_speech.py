@@ -1,17 +1,12 @@
 import pytest
 
-from moshi import speech
+from moshi.utils import audio, speech
 
-@pytest.mark.asyncio
 @pytest.mark.gcp
-def test_synthesize():
-    msg = "Hello world"
-    voice = speech.get_voice("en-US")
-    audio_bytes = speech.synthesize_speech_bytes(msg, voice)
-    assert isinstance(audio_bytes, bytes)
-    assert len(audio_bytes) > 0
-    assert audio_bytes.startswith(b"RIFF")
-    assert audio_bytes[20:24] == b"WAVE"
-    assert audio_bytes[24:28] == b"fmt "
-    assert audio_bytes[36:40] == b"data"
-    assert audio_bytes[40:44] == b"\x00\x00\x00\x00"
+@pytest.mark.asyncio
+async def test_synthesize():
+    msg = "Hello"
+    voice = await speech.get_voice("en-US")
+    af = await speech.synthesize(msg, voice)
+    assert af.rate == 24000
+    print(f"Test wav length: {audio.seconds(af)}")

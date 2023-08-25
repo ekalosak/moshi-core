@@ -24,5 +24,3 @@ def test_seconds(wavbytes):
 def test_energy(wavbytes):
     af = audio.wav2af(wavbytes)
     _ = audio.energy(af)
-
-# def test_m4a(m4abytes):

@@ -32,6 +32,8 @@ def seconds(af: AudioFrame) -> float:
 
 def _wavb2af(wav: io.BytesIO) -> AudioFrame:
     sample_rate, arr = wavfile.read(wav)
+    if len(arr.shape) == 1:
+        arr = arr.reshape(-1, 1)
     samples, channels = arr.shape
     layout = "stereo" if channels == 2 else "mono"
     assert channels == len(av.AudioLayout(layout).channels)
@@ -62,3 +64,19 @@ def wav2af(wav: bytes | io.BytesIO | Path):
         return _wavp2af(wav)
     else:
         raise TypeError(f"wav must be bytes, io.BytesIO, or Path, not {type(wav)}")
+
+def af2wav(af: av.AudioFrame) -> io.BytesIO:
+    """Convert an AudioFrame to a wav file."""
+    assert isinstance(af, av.AudioFrame)
+    af.pts = None
+    af.time_base = None
+    af.layout = "stereo"
+    af.format = "s16"
+    af.rate = 24000
+    af.samples = 24000
+    af.planes = 1
+    af.linesize = 1
+    af = af.reformat(format="s16", layout="stereo", rate=24000)
+    af = af.to_ndarray()
+    wav = wavfile.write(af)
+    return wav

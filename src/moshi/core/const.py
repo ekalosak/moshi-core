@@ -2,8 +2,8 @@ import os
 
 from loguru import logger
 
-GOOGLE_PROJECT_ID = os.environ.get('GOOGLE_PROJECT_ID')
-if GOOGLE_PROJECT_ID:
-    logger.info(f"GOOGLE_PROJECT_ID: {GOOGLE_PROJECT_ID}")
+GOOGLE_PROJECT = os.environ.get('GOOGLE_PROJECT')
+if GOOGLE_PROJECT:
+    logger.info(f"GOOGLE_PROJECT: {GOOGLE_PROJECT}")
 else:
-    logger.warning("GOOGLE_PROJECT_ID not set.")
+    logger.warning("GOOGLE_PROJECT not set.")
