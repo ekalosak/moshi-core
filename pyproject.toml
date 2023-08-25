@@ -1,6 +1,6 @@
 [project]
 name = "moshi-core"
-version = "23.8.24"
+version = "23.8.26"
 description = "Moshi is a spoken language tutor."
 readme = "README.md"
 requires-python = ">=3.7"
@@ -17,8 +17,6 @@ classifiers = [
   "Topic :: Education",
 ]
 dependencies = [
-  "aiohttp",
-  "aiohttp_session",
   "av",
   "fastapi",
   "firebase_admin",
