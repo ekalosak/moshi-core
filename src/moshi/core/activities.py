@@ -17,6 +17,10 @@ client = firestore.Client(project=GOOGLE_PROJECT)
 
 logger.success("Activities module loaded.")
 
+class NotCreatedError(Exception):
+    """Raised when an activity is not created before it is loaded."""
+    pass
+
 class ActivityType(str, Enum):
     UNSTRUCTURED = "unstructured"  # talk about anything, user-driven.
     TOPICAL = "topical"  # talk about a specific topic e.g. sports, politics, etc.
@@ -91,7 +95,7 @@ class BaseActivity(ABC, VersionedModel):
         """Translate the prompt into the user's target language.
         NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
         """
-        with logger.contextualize(activity_type=self.type, language=self.language):
+        with logger.contextualize(activity_type=self.type.value, language=self.language):
             logger.trace("Translating prompt...")
             prompt = asyncio.run(lang.translate_messages(self._get_base_prompt(), self.language))
             logger.info(f"Translated prompt: {prompt}")
@@ -125,28 +129,32 @@ class BaseActivity(ABC, VersionedModel):
         """This is a new coversation, so initialize the transcript skeleton.
         The tid and aid are initialized in this function, in place.
         """
-        with logger.contextualize(user=usr.model_dump_json(exclude=["email"]), activity_type=self.type):
+        with logger.contextualize(activity_type=self.type.value):
             logger.trace("Starting activity...")
             self.init_activity()
             logger.trace(f"Initializing transcript...")
             self.init_transcript(usr.uid)
             logger.trace(f"Transcript initialized: {self._tid}")
-            logger.trace("Activity started: {self._aid}")
+            logger.trace(f"Activity started: {self._aid}")
         
 
     def load(self):
-        """If this is an existing conversation, load the transcript."""
-        ...
+        """If this is an existing conversation, load the transcript and other activity attributes.
+        Raises:
+            NotCreatedError: If the activity has not been created yet.
+        """
+        if self._transcript:
+            logger.debug("Already loaded")
+            return
+        raise NotImplementedError
 
-    def respond(self, usr_audio_bytes: bytes) -> bytes:
+    def respond(self, sid: str):
         """Main loop iter. Listen -> think -> respond -> speak.
         Args:
-            usr_audio_bytes (bytes): the user's audio bytes.
-        Returns:
-            bytes: the character's audio bytes in WAV format.
+            sid: the storage id for the user's audio.
         """
-        ...
-        
+        self.load()
+        # read the object with id <sid> from gcloud storage
 
 
 class Unstructured(BaseActivity):
