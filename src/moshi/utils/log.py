@@ -8,15 +8,14 @@ from loguru._defaults import LOGURU_FORMAT
 
 LOG_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
 
-ENV = os.getenv("ENV", "dev")
-LOG_LEVEL = os.getenv("MLOGLEVEL", "DEBUG")
+ENV = os.getenv("ENV", "prod")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
 FILE_LOGS = int(os.getenv("MLOGDISK", 0))
 STDOUT_LOGS = int(os.getenv("MLOGSTDOUT", 1))
 CLOUD_LOGS = int(os.getenv("MLOGCLOUD", 0))
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} FILE_LOGS={FILE_LOGS} STDOUT_LOGS={STDOUT_LOGS} CLOUD_LOGS={CLOUD_LOGS}")
-
-if STDOUT_LOGS:
-    import pyfiglet
+if ENV == "dev":
+    logger.warning("Running in dev mode. Logs will be verbose.")
 
 logger.success("Logging configured.")
 
@@ -110,8 +109,3 @@ def setup_loguru():
             format="{message}",
         )
         print('GCP logger added.')
-
-
-def splash(text: str):
-    if STDOUT_LOGS:
-        print("\n" + pyfiglet.Figlet(font="roman").renderText(text) + "\n")
