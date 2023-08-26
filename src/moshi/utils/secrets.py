@@ -12,7 +12,8 @@ SECRET_TIMEOUT = os.getenv("MOSHISECRETTIMEOUT", 2)
 OPENAI_APIKEY_SECRET = os.getenv("OPENAI_APIKEY_SECRET", "openai-apikey-0")
 logger.info(f"OPENAI_APIKEY_SECRET={OPENAI_APIKEY_SECRET} SECRET_TIMEOUT={SECRET_TIMEOUT}")
 
-client = secretmanager.SecretManagerServiceAsyncClient()
+# client = secretmanager.SecretManagerServiceAsyncClient()  # NOTE firebase functions can't use async
+client = secretmanager.SecretManagerServiceClient()
 logger.success("Secrets module loaded.")
 
 # functools.lru_cache(maxsize=8)
@@ -28,7 +29,11 @@ async def get_secret(
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     logger.debug(f"Constructed name: {name}")
     response = await asyncio.wait_for(
-        client.access_secret_version(request={"name": name}),
+        asyncio.to_thread(
+            client.access_secret_version,
+            request={"name": name},
+        ),
+        # client.access_secret_version(request={"name": name}),
         timeout=SECRET_TIMEOUT,
     )
     logger.info(f"Retrieved secret: {response.name}")

@@ -9,21 +9,21 @@ from typing import Annotated, Literal, Union
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from .base import Message, Role
+from .base import Message, Role, Profile
 from .character import Character
 from moshi import __version__ as moshi_version
-from moshi.utils.storage import firestore_client
-from moshi.utils import speech, ctx, lang
+from moshi.utils.storage import client as firestore_client
+from moshi.utils import speech, lang
 
-transcript_col = firestore_client.collection("transcripts")
+# transcript_col = firestore_client.collection("transcripts")
 
 
 @dataclasses.dataclass
 class Transcript:
-    activity_type: str
+    actid: str
     messages: list[Message]
-    uid: str  # user id from FBA, required to index transcripts in db
     language: str
+    tid: str = None
     timestamp: datetime.datetime = None
     moshi_version: str = moshi_version
 
@@ -42,10 +42,23 @@ class BaseActivity(ABC, BaseModel):
     """An Activity provides a prompt for a conversation and the database wrapper."""
 
     activity_type: ActivityType
-    __update_transcript_task: asyncio.Task = None
-    __transcript: Transcript = None
-    __cid: str = None
-    __character: Character = None
+    profile: Profile
+    _character: Character = None
+    _transcript: Transcript = None
+
+    def __init__(self, activity_type: ActivityType, profile: Profile, tid: str = None):
+        logger.trace("Initializing activity...")
+        super().__init__(activity_type=activity_type, profile=profile)
+        loop = asyncio.get_event_loop()
+        if tid:
+            logger.trace("Loading existing transcript...")
+            loop.run_until_complete(self.__load(tid))
+        else:
+            logger.trace("Creating new transcript...")
+            loop.run_until_complete(self.__init())
+        logger.trace("Activity initialized.")
+
+
 
     @abstractmethod
     def _prompt(self) -> list[Message]:
@@ -54,52 +67,31 @@ class BaseActivity(ABC, BaseModel):
 
     @property
     def messages(self) -> list[Message]:
-        return self.__transcript.messages
+        return self._transcript.messages
 
     @property
     def voice(self):
-        return self.__character.voice
+        return self._character.voice
 
     @property
     def lang(self):
-        return self.__character.language
+        return self._character.language
 
     @property
-    def cid(self):
-        return self.__cid
+    def tid(self):
+        return self._transcript.tid
 
-    def add_msg(self, msg: Message):
-        self.__transcript.messages.append(msg)
-        logger.debug("Updating transcript in Firestore with best effort.")
-        if self.__update_transcript_task:
-            if self.__update_transcript_task.cancel():
-                logger.warning("Cancelled previous update transcript task.")
-        self.__update_transcript_task = asyncio.create_task(self.__save())
-
-    @logger.catch
-    async def start(self):
-        await asyncio.gather(
-            self.__init_transcript(),
-            self.__init_character(),
-            )
-        logger.success("Activity started!")
-
-    async def stop(self):
-        """Save the transcript to Firestore."""
-        logger.info("Stopping activity...")
-        if self.__update_transcript_task:
-            if self.__update_transcript_task.cancel():
-                logger.warning("Cancelled previous update transcript task.")
-        logger.debug("Saving transcript to Firestore...")
+    async def add_msg(self, msg: Message):
+        logger.trace("Adding message to transcript...")
+        self._transcript.messages.append(msg)
         await self.__save()
-        logger.debug("Saved transcript to Firestore.")
-        logger.success("Activity stopped!")
+        logger.trace("Added message to transcript.")
 
     async def _translate_prompt(self) -> list[Message]:
         """Translate the prompt into the user's target language. Timeout handled by caller. Requires a profile to be set."""
         logger.trace("Translating prompt...")
         prompt = self._prompt()
-        prompt = await lang.translate_messages(prompt, ctx.profile.get().lang)
+        prompt = await lang.translate_messages(prompt, self.profile.lang)
         logger.trace(f"Translated prompt: {prompt}")
         return prompt
 
@@ -109,8 +101,7 @@ class BaseActivity(ABC, BaseModel):
         messages = await asyncio.wait_for(self._translate_prompt(), timeout=5)
         logger.trace(f"Translated prompt: {messages}")
         self.__transcript = Transcript(
-            activity_type=self.activity_type,
-            uid=ctx.user.get().uid,
+            self.activity,
             language=ctx.profile.get().lang,
             messages=messages,
         )
@@ -120,12 +111,20 @@ class BaseActivity(ABC, BaseModel):
     async def __init_character(self):
         """Initialize the character for this conversation."""
         logger.debug(f"Creating character...")
-        lang = ctx.profile.get().lang
+        lang = self.profile.lang
         logger.trace("Getting voice")
         voice = await speech.get_voice(lang)
         logger.debug(f"Selected voice: {voice}")
         self.__character = Character(voice)
         logger.debug(f"Character initialized: {self.__character}")
+
+    async def __init(self):
+        """If this is a new conversation, initialize the transcript and character."""
+        await asyncio.gather(self.__init_transcript(), self.__init_character())
+
+    async def __load(self):
+        """If this is an existing conversation, load the transcript and character."""
+        
 
     async def __save(self):
         """Save the transcript to Firestore."""

@@ -18,7 +18,6 @@ classifiers = [
 ]
 dependencies = [
   "av",
-  "fastapi",
   "firebase_admin",
   "google-auth",
   "google-cloud-firestore",

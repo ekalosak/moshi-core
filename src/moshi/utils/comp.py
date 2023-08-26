@@ -20,7 +20,7 @@ logger.info(f"OPENAI_COMPLETION_MODEL={OPENAI_COMPLETION_MODEL}")
 ChatCompletionPayload = NewType("ChatCompletionPayload", list[dict[str, str]])
 CompletionPayload = NewType("CompletionPayload", str)
 
-logger.success("Loaded completion module.")
+logger.success("Completion module loaded.")
 
 def _get_type_of_model(model: Model) -> ModelType:
     """Need to know the type of model for endpoint compatibility.
