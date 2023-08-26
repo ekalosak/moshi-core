@@ -15,8 +15,9 @@ class User(VersionedModel):
     uid: str
     name: str
     language: str
+    native_language: str
 
-def create_user(usr: User):
+def create_doc(usr: User):
     """Create a new user in Firestore."""
     logger.trace(f"Creating user...")
     doc_ref = client.collection("users").document(usr.uid)

@@ -39,3 +39,16 @@ class Character:
 
     def __post_init__(self):
         self.name = self.name or _name_from_language(self.language)
+
+def get():
+    """Get the character for this scenario."""
+    return {
+        'name': 'Francis',
+        'voice': {
+            'en': 'en-US-Wavenet-A',
+            'fr': 'fr-FR-Wavenet-A',
+        },
+        'gender': 2,
+        'age': 20,
+        'description': 'This character is a student.',
+    }

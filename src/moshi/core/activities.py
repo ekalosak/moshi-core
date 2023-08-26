@@ -28,6 +28,7 @@ class BaseActivity(ABC, VersionedModel):
     type: ActivityType
     language: str
     _aid: str = None
+    _tid: str = None  # NOTE: redundant with _transcript
     _transcript: transcript.Transcript = None
     _character: character.Character = None
 
@@ -46,7 +47,10 @@ class BaseActivity(ABC, VersionedModel):
 
     @property
     def tid(self):
-        return self._transcript.tid
+        try:
+            return self._transcript.tid
+        except AttributeError:
+            return self._tid
 
     @property
     def aid(self):
@@ -66,7 +70,7 @@ class BaseActivity(ABC, VersionedModel):
         activity_doc.set(activity_payload)
         return activity_doc
 
-    def get_doc(self) -> firestore.DocumentReference:
+    def init_activity(self):
         """Get the document for this activity in the desired language. If it doesn't exist, create it."""
         logger.trace("Getting activity doc...")
         activity_collection = client.collection("activities")
@@ -81,7 +85,7 @@ class BaseActivity(ABC, VersionedModel):
             activity_doc = self.create_doc()
             logger.success("Created new activity doc.")
         logger.trace("Got activity doc.")
-        return activity_doc
+        self._aid = activity_doc.id
 
     def translate_prompt(self) -> list[Message]:
         """Translate the prompt into the user's target language.
@@ -104,7 +108,7 @@ class BaseActivity(ABC, VersionedModel):
         self._character = character.Character(voice)
         logger.debug(f"Character initialized: {self.__haracter}")
 
-    def init_transcript(self, uid: str) -> firestore.DocumentReference:
+    def init_transcript(self, uid: str):
         """Create a skeleton transcript document in Firestore for the user.
         Raises:
             ValueError: If the user does not exist.
@@ -114,26 +118,33 @@ class BaseActivity(ABC, VersionedModel):
         if not usr_doc.exists:
             raise ValueError(f"User does not exist: {uid}")
         transcript_doc_ref = usr_doc_ref.collection("transcripts").document()
-        transcript_payload = transcript.skeleton(self._aid, self.language)
-        transcript_doc_ref.set(transcript_payload)
+        transcript_doc_ref.set(transcript.skeleton(self._aid, self.language))
+        self._tid = transcript_doc_ref.id
 
-    def start(self, usr: user.User) -> str:
+    def start(self, usr: user.User):
         """This is a new coversation, so initialize the transcript skeleton.
-        Returns:
-            str: the id of the transcript
+        The tid and aid are initialized in this function, in place.
         """
-        with logger.contextualize(**usr.model_dump(exclude=["email"]), activity_type=self.type):
+        with logger.contextualize(**usr.model_dump_json(exclude=["email"]), activity_type=self.type):
             logger.trace("Starting activity...")
-            activity_doc = self.get_doc()
-            self._aid = activity_doc.id
-            tid = self.init_transcript(usr.uid)
-            logger.debug(f"Initialized transcript: {tid}")
-            logger.trace("Started activity.")
-        return tid
+            self.init_activity()
+            logger.trace(f"Initializing transcript...")
+            self.init_transcript(usr.uid)
+            logger.trace(f"Transcript initialized: {self._tid}")
+            logger.trace("Activity started: {self._aid}")
         
 
     def load(self):
         """If this is an existing conversation, load the transcript."""
+        ...
+
+    def respond(self, usr_audio_bytes: bytes) -> bytes:
+        """Main loop iter. Listen -> think -> respond -> speak.
+        Args:
+            usr_audio_bytes (bytes): the user's audio bytes.
+        Returns:
+            bytes: the character's audio bytes in WAV format.
+        """
         ...
         
 
@@ -143,18 +154,6 @@ class Unstructured(BaseActivity):
 
     def _get_base_prompt(self) -> list[Message]:
         messages = [
-            # Message(
-            #     Role.SYS,
-            #     "Use this language to respond.",
-            # ),
-            Message(
-                role=Role.SYS,
-                content="You are the second character, and I am the first character.",
-            ),
-            Message(
-                role=Role.SYS,
-                content="Do not break the fourth wall.",
-            ),
             Message(
                 role=Role.SYS,
                 content="If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
