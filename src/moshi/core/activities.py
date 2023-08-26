@@ -52,10 +52,10 @@ class BaseActivity(ABC, VersionedModel):
     def aid(self):
         return self._aid
 
-    async def create_doc(self) -> firestore.DocumentReference:
+    def create_doc(self) -> firestore.DocumentReference:
         """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
         activity_payload = self.model_dump()
-        prompt = await self.translate_prompt()
+        prompt = self.translate_prompt()
         prompt = [msg.model_dump() for msg in prompt]
         activity_payload["prompt"] = prompt
         activity_collection = client.collection("activities")
@@ -63,13 +63,13 @@ class BaseActivity(ABC, VersionedModel):
         activity_doc.set(activity_payload)
         return activity_doc
 
-    async def get_doc(self) -> firestore.DocumentReference:
+    def get_doc(self) -> firestore.DocumentReference:
         """Get the document for this activity in the desired language. If it doesn't exist, create it."""
         logger.trace("Getting activity doc...")
         activity_collection = client.collection("activities")
         # get the latest activity doc matching the activity type and language
         query = activity_collection.where("type", "==", self.type).where("language", "==", self.language).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
-        activity_docs = await query.get()
+        activity_docs = query.get()
         if activity_docs:
             assert len(activity_docs) == 1, "More than one activity doc found."
             activity_doc = activity_docs[0]
@@ -80,52 +80,56 @@ class BaseActivity(ABC, VersionedModel):
         logger.trace("Got activity doc.")
         return activity_doc
 
-    async def translate_prompt(self) -> list[Message]:
+    def translate_prompt(self) -> list[Message]:
         """Translate the prompt into the user's target language.
         NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
         """
         with logger.contextualize(activity_type=self.type, language=self.language):
             logger.trace("Translating prompt...")
-            prompt = await lang.translate_messages(self._get_base_prompt(), self.language)
+            prompt = asyncio.run(lang.translate_messages(self._get_base_prompt(), self.language))
             logger.info(f"Translated prompt: {prompt}")
             logger.trace(f"Translated prompt.")
         return prompt
 
-    async def init_transcript(self):
-        """Create the Firestore artifacts for this conversation."""
-        logger.trace("Initializing transcript...")
-        messages = await asyncio.wait_for(self.get_prompt(), timeout=5)
-        logger.trace(f"Translated prompt.")
-        self._transcript = transcript.Transcript(
-            self.activity,
-            language=self.language,
-            messages=messages,
-        )
-        await self.__save()
-        logger.trace(f"Transcript initialized.")
-
-    async def init_character(self):
+    def init_character(self):
         """Initialize the character for this conversation."""
         logger.debug(f"Creating character...")
         lang = self.profile.lang
         logger.trace("Getting voice")
-        voice = await speech.get_voice(lang)
+        voice = asyncio.run(speech.get_voice(lang))
         logger.debug(f"Selected voice: {voice}")
         self._character = character.Character(voice)
         logger.debug(f"Character initialized: {self.__haracter}")
 
-    async def start(self, usr: user.User) -> str:
-        """This is a new coversation, so initialize the transcript.
+    def init_transcript(self, uid: str) -> firestore.DocumentReference:
+        """Create a skeleton transcript document in Firestore for the user.
+        Raises:
+            ValueError: If the user does not exist.
+        """
+        usr_doc_ref = client.collection("users").document(uid)
+        usr_doc = usr_doc_ref.get()
+        if not usr_doc.exists:
+            raise ValueError(f"User does not exist: {uid}")
+        transcript_doc_ref = usr_doc_ref.collection("transcripts").document()
+        transcript_payload = transcript.skeleton(self._aid, self.language)
+        transcript_doc_ref.set(transcript_payload)
+
+    def start(self, usr: user.User) -> str:
+        """This is a new coversation, so initialize the transcript skeleton.
         Returns:
             str: the id of the transcript
         """
-        with logger.contextualize(**usr.model_dump()):
+        with logger.contextualize(**usr.model_dump(exclude=["email"]), activity_type=self.type):
             logger.trace("Starting activity...")
-            activity_doc = await self.get_doc()
-            transcript_doc = await usr.init_transcript(activity_doc.id)
-            # create transcript doc skeleton (created_at, language, activity id, empty messages array)
+            activity_doc = self.get_doc()
+            self._aid = activity_doc.id
+            tid = self.init_transcript(usr.uid)
+            logger.debug(f"Initialized transcript: {tid}")
+            logger.trace("Started activity.")
+        return tid
+        
 
-    async def load(self):
+    def load(self):
         """If this is an existing conversation, load the transcript."""
         ...
         

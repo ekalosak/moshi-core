@@ -21,10 +21,11 @@ class Role(str, Enum):
     AST = "ast"
 
 
-class Message(BaseModel):
+class Message(VersionedModel):
     role: Role
     content: str
-
+    translation: str = None
+    audio: bytes = None
 
 # TODO Model(ABC, str, Enum), ChatModel(Model), CompletionModel(Model)
 class ModelType(str, Enum):

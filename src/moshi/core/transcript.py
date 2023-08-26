@@ -1,8 +1,19 @@
 import asyncio
+from datetime import datetime
 
 from loguru import logger
 
-from moshi import Message, VersionedModel
+from moshi import Message, VersionedModel, __version__ as moshi_version
+
+def skeleton(activity_id: str, language: str) -> dict:
+    transcript_payload = {
+        'aid': activity_id,
+        'language': language,  # NOTE redundant by activity
+        'messages': [],
+        'created_at': datetime.now(),
+        'moshi_version': moshi_version,
+    }
+    return transcript_payload
 
 class Transcript(VersionedModel):
     aid: str
