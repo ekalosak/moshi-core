@@ -4,18 +4,28 @@
 #     - String similarity
 
 import asyncio
-import textwrap
 from difflib import SequenceMatcher
+import textwrap
 
 from google.cloud import translate_v2 as translate
 from loguru import logger
 
 from moshi import Message
 
-logger.trace("Loading lang module...")
+logger.trace("Loading language module...")
 client = translate.Client()
-logger.trace("Loaded!")
+logger.trace("Loaded translate client.")
 
+class LanguageCode(str):
+    def match(self, other: 'LanguageCode', strict=False) -> bool:
+        """Match the language codes if self is a subset of other."""
+        if strict:
+            if len(self) == 2:
+                return self == other[0:2]
+            else:
+                return self == other
+        else:
+            return self.split('-')[0] == other.split('-')[0]
 
 def similar(a, b) -> float:
     """Return similarity of two strings.
@@ -23,7 +33,6 @@ def similar(a, b) -> float:
         - https://stackoverflow.com/a/17388505/5298555
     """
     return SequenceMatcher(None, a, b).ratio()
-
 
 async def translate_messages(messages: list[Message], target: str) -> list[Message]:
     """ Translate a list of messages. Timeout handled by caller. """
@@ -74,3 +83,5 @@ async def detect_language(text: str) -> str:
     logger.debug(f"Confidence: {conf}")
     logger.info(f"Language: {lang}")
     return lang
+
+logger.success("Language moduel loaded.")
