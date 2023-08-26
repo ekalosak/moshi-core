@@ -55,7 +55,10 @@ class BaseActivity(ABC, VersionedModel):
     def create_doc(self) -> firestore.DocumentReference:
         """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
         activity_payload = self.model_dump()
-        prompt = self.translate_prompt()
+        if self.language.startswith("en"):
+            prompt = self._get_base_prompt()
+        else:
+            prompt = self.translate_prompt()
         prompt = [msg.model_dump() for msg in prompt]
         activity_payload["prompt"] = prompt
         activity_collection = client.collection("activities")
@@ -145,16 +148,16 @@ class Unstructured(BaseActivity):
             #     "Use this language to respond.",
             # ),
             Message(
-                Role.SYS,
-                "You are the second character, and I am the first character.",
+                role=Role.SYS,
+                content="You are the second character, and I am the first character.",
             ),
             Message(
-                Role.SYS,
-                "Do not break the fourth wall.",
+                role=Role.SYS,
+                content="Do not break the fourth wall.",
             ),
             Message(
-                Role.SYS,
-                "If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
+                role=Role.SYS,
+                content="If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
             )
         ]
         return messages
