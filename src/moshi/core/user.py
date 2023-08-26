@@ -35,7 +35,7 @@ def get_user(uid: str) -> User:
     doc_snap = doc_ref.get()
     if not doc_snap.exists:
         raise ValueError(f"User does not exist: {uid}")
-    logger.trace(f"User found.")
+    logger.trace(f"User found: {doc_snap.to_dict()['name']}")
     try:
         usr = User(uid=uid, **doc_snap.to_dict())
     except Exception as e:

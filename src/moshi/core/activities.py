@@ -125,7 +125,7 @@ class BaseActivity(ABC, VersionedModel):
         """This is a new coversation, so initialize the transcript skeleton.
         The tid and aid are initialized in this function, in place.
         """
-        with logger.contextualize(**usr.model_dump_json(exclude=["email"]), activity_type=self.type):
+        with logger.contextualize(user=usr.model_dump_json(exclude=["email"]), activity_type=self.type):
             logger.trace("Starting activity...")
             self.init_activity()
             logger.trace(f"Initializing transcript...")
