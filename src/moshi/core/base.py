@@ -1,24 +1,19 @@
 """ Base types. """
-import dataclasses
-from dataclasses import dataclass
+import datetime
 from enum import Enum
 
-DEFAULT_DAILY_CONVO_LIMIT = 3
+from pydantic import BaseModel
 
-@dataclass
-class User:
-    uid: str
-    email: str
-    daily_convo_limit: int = DEFAULT_DAILY_CONVO_LIMIT
+from moshi import __version__ as moshi_version
 
+class VersionedModel(BaseModel):
+    created_at: datetime.datetime = datetime.datetime.now()
+    moshi_version: str = moshi_version
 
-@dataclass
-class Profile:
-    uid: str
-    lang: str
-    name: str
-    primary_lang: str
-
+    # def __post_init__(self):
+    #     # TODO can these be moved to the dataclass-like init above?
+    #     self.moshi_version = self.moshi_version or moshi_version
+    #     self.created_at = self.created_at or datetime.datetime.now()
 
 class Role(str, Enum):
     SYS = "sys"
@@ -26,9 +21,7 @@ class Role(str, Enum):
     AST = "ast"
 
 
-@dataclass
-class Message:
-    # NOTE dataclasses.dataclass.asdict()
+class Message(BaseModel):
     role: Role
     content: str
 

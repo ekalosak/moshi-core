@@ -1,5 +1,5 @@
-__version__ = "23.8.26"
-
+from . import version
+__version__ = version.__version__
 from .core.base import *
 from .core.const import *
 from .utils import log

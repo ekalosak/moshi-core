@@ -1,68 +1,39 @@
 """Create initial prompt for a an unstructured conversation."""
 from abc import ABC, abstractmethod
 import asyncio
-import dataclasses
 import datetime
 from enum import Enum
 from typing import Annotated, Literal, Union
 
+from google.cloud import firestore
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from .base import Message, Role, Profile
-from .character import Character
-from moshi import __version__ as moshi_version
-from moshi.utils.storage import client as firestore_client
+from moshi import Message, Role, VersionedModel, GOOGLE_PROJECT
+from moshi.core import user, character, transcript
 from moshi.utils import speech, lang
 
-# transcript_col = firestore_client.collection("transcripts")
+client = firestore.Client(project=GOOGLE_PROJECT)
 
-
-@dataclasses.dataclass
-class Transcript:
-    actid: str
-    messages: list[Message]
-    language: str
-    tid: str = None
-    timestamp: datetime.datetime = None
-    moshi_version: str = moshi_version
-
-    def asdict(self) -> dict:
-        return dataclasses.asdict(self)
-
-    def __post_init__(self):
-        self.timestamp = self.timestamp or datetime.datetime.now()
-
+logger.success("Activities module loaded.")
 
 class ActivityType(str, Enum):
-    UNSTRUCTURED = "unstructured"
+    UNSTRUCTURED = "unstructured"  # talk about anything, user-driven.
+    TOPICAL = "topical"  # talk about a specific topic e.g. sports, politics, etc.
+    SCENARIO = "scenario"  # play out a scenario e.g. a job interview, ordering coffee, etc.
 
-
-class BaseActivity(ABC, BaseModel):
+class BaseActivity(ABC, VersionedModel):
     """An Activity provides a prompt for a conversation and the database wrapper."""
 
-    activity_type: ActivityType
-    profile: Profile
-    _character: Character = None
-    _transcript: Transcript = None
-
-    def __init__(self, activity_type: ActivityType, profile: Profile, tid: str = None):
-        logger.trace("Initializing activity...")
-        super().__init__(activity_type=activity_type, profile=profile)
-        loop = asyncio.get_event_loop()
-        if tid:
-            logger.trace("Loading existing transcript...")
-            loop.run_until_complete(self.__load(tid))
-        else:
-            logger.trace("Creating new transcript...")
-            loop.run_until_complete(self.__init())
-        logger.trace("Activity initialized.")
-
-
+    type: ActivityType
+    language: str
+    _aid: str = None
+    _transcript: transcript.Transcript = None
+    _character: character.Character = None
 
     @abstractmethod
-    def _prompt(self) -> list[Message]:
-        """Assemble the prompt."""
+    def _get_base_prompt(self) -> list[Message]:
+        """Get the base prompt for this activity."""
         ...
 
     @property
@@ -74,84 +45,104 @@ class BaseActivity(ABC, BaseModel):
         return self._character.voice
 
     @property
-    def lang(self):
-        return self._character.language
-
-    @property
     def tid(self):
         return self._transcript.tid
 
-    async def add_msg(self, msg: Message):
-        logger.trace("Adding message to transcript...")
-        self._transcript.messages.append(msg)
-        await self.__save()
-        logger.trace("Added message to transcript.")
+    @property
+    def aid(self):
+        return self._aid
 
-    async def _translate_prompt(self) -> list[Message]:
-        """Translate the prompt into the user's target language. Timeout handled by caller. Requires a profile to be set."""
-        logger.trace("Translating prompt...")
-        prompt = self._prompt()
-        prompt = await lang.translate_messages(prompt, self.profile.lang)
-        logger.trace(f"Translated prompt: {prompt}")
+    async def create_doc(self) -> firestore.DocumentReference:
+        """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
+        activity_payload = self.model_dump()
+        prompt = await self.translate_prompt()
+        prompt = [msg.model_dump() for msg in prompt]
+        activity_payload["prompt"] = prompt
+        activity_collection = client.collection("activities")
+        activity_doc = activity_collection.document()
+        activity_doc.set(activity_payload)
+        return activity_doc
+
+    async def get_doc(self) -> firestore.DocumentReference:
+        """Get the document for this activity in the desired language. If it doesn't exist, create it."""
+        logger.trace("Getting activity doc...")
+        activity_collection = client.collection("activities")
+        # get the latest activity doc matching the activity type and language
+        query = activity_collection.where("type", "==", self.type).where("language", "==", self.language).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
+        activity_docs = await query.get()
+        if activity_docs:
+            assert len(activity_docs) == 1, "More than one activity doc found."
+            activity_doc = activity_docs[0]
+        else:
+            logger.info("Creating new activity doc...")
+            activity_doc = self.create_doc()
+            logger.success("Created new activity doc.")
+        logger.trace("Got activity doc.")
+        return activity_doc
+
+    async def translate_prompt(self) -> list[Message]:
+        """Translate the prompt into the user's target language.
+        NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
+        """
+        with logger.contextualize(activity_type=self.type, language=self.language):
+            logger.trace("Translating prompt...")
+            prompt = await lang.translate_messages(self._get_base_prompt(), self.language)
+            logger.info(f"Translated prompt: {prompt}")
+            logger.trace(f"Translated prompt.")
         return prompt
 
-    async def __init_transcript(self):
+    async def init_transcript(self):
         """Create the Firestore artifacts for this conversation."""
         logger.trace("Initializing transcript...")
-        messages = await asyncio.wait_for(self._translate_prompt(), timeout=5)
-        logger.trace(f"Translated prompt: {messages}")
-        self.__transcript = Transcript(
+        messages = await asyncio.wait_for(self.get_prompt(), timeout=5)
+        logger.trace(f"Translated prompt.")
+        self._transcript = transcript.Transcript(
             self.activity,
-            language=ctx.profile.get().lang,
+            language=self.language,
             messages=messages,
         )
         await self.__save()
         logger.trace(f"Transcript initialized.")
 
-    async def __init_character(self):
+    async def init_character(self):
         """Initialize the character for this conversation."""
         logger.debug(f"Creating character...")
         lang = self.profile.lang
         logger.trace("Getting voice")
         voice = await speech.get_voice(lang)
         logger.debug(f"Selected voice: {voice}")
-        self.__character = Character(voice)
-        logger.debug(f"Character initialized: {self.__character}")
+        self._character = character.Character(voice)
+        logger.debug(f"Character initialized: {self.__haracter}")
 
-    async def __init(self):
-        """If this is a new conversation, initialize the transcript and character."""
-        await asyncio.gather(self.__init_transcript(), self.__init_character())
+    async def start(self, usr: user.User) -> str:
+        """This is a new coversation, so initialize the transcript.
+        Returns:
+            str: the id of the transcript
+        """
+        with logger.contextualize(**usr.model_dump()):
+            logger.trace("Starting activity...")
+            activity_doc = await self.get_doc()
+            transcript_doc = await usr.init_transcript(activity_doc.id)
+            # create transcript doc skeleton (created_at, language, activity id, empty messages array)
 
-    async def __load(self):
-        """If this is an existing conversation, load the transcript and character."""
+    async def load(self):
+        """If this is an existing conversation, load the transcript."""
+        ...
         
-
-    async def __save(self):
-        """Save the transcript to Firestore."""
-        if self.__cid:
-            logger.info("Updating existing doc...")
-            doc_ref = transcript_col.document(self.__cid)
-        else:
-            logger.info("Creating new conversation document...")
-            doc_ref = transcript_col.document()
-            self.__cid = doc_ref.id
-        with logger.contextualize(cid=self.__cid):
-            logger.debug(f"Saving conversation document...")
-            try:
-                await doc_ref.set(self.__transcript.asdict())
-                logger.success(f"Saved conversation document!")
-            except asyncio.CancelledError:
-                logger.debug(f"Cancelled saving conversation document.")
 
 
 class Unstructured(BaseActivity):
-    activity_type: Literal[ActivityType.UNSTRUCTURED] = ActivityType.UNSTRUCTURED
+    type: Literal[ActivityType.UNSTRUCTURED] = ActivityType.UNSTRUCTURED
 
-    def _prompt(self) -> list[Message]:
+    def _get_base_prompt(self) -> list[Message]:
         messages = [
+            # Message(
+            #     Role.SYS,
+            #     "Use this language to respond.",
+            # ),
             Message(
                 Role.SYS,
-                "Use this language to respond.",
+                "You are the second character, and I am the first character.",
             ),
             Message(
                 Role.SYS,
@@ -159,12 +150,12 @@ class Unstructured(BaseActivity):
             ),
             Message(
                 Role.SYS,
-                "You are the second character, and I am the first character.",
-            ),
+                "If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
+            )
         ]
         return messages
 
 
 Activity = Annotated[
-    Union[Unstructured, Unstructured], Field(discriminator="activity_type")
+    Union[Unstructured, Unstructured], Field(discriminator="type")
 ]

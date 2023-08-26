@@ -70,13 +70,12 @@ def setup_loguru():
     if STDOUT_LOGS:
         print("Adding stdout logger...")
         logger.add(
-            diagnose=True,
+            diagnose=ENV=="dev",
             sink=sys.stderr,
             level=LOG_LEVEL,
             format=LOG_FORMAT,
-            colorize=True,
+            colorize=ENV=="dev",
         )
-        logger.warning("Logging to stdout, including diagnostics.")
     if FILE_LOGS:
         print("Adding file logger...")
         logger.add(
