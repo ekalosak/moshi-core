@@ -1,8 +1,7 @@
-import asyncio
 import os
 import sys
 
-from google.cloud import logging
+# from google.cloud import logging  # NOTE building for functions so cloud logging via stdout
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 
@@ -15,9 +14,7 @@ STDOUT_LOGS = int(os.getenv("MLOGSTDOUT", 1))
 CLOUD_LOGS = int(os.getenv("MLOGCLOUD", 0))
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} FILE_LOGS={FILE_LOGS} STDOUT_LOGS={STDOUT_LOGS} CLOUD_LOGS={CLOUD_LOGS}")
 if ENV == "dev":
-    logger.warning("Running in dev mode. Logs will be verbose.")
-
-logger.success("Logging configured.")
+    logger.warning("Running in dev mode. Logs will be verbose and include sensitive diagnostic data.")
 
 def _gcp_log_severity_map(level: str) -> str:
     """Convert loguru custom levels to GCP allowed severity level.
@@ -84,27 +81,17 @@ def setup_loguru():
             format=LOG_FORMAT,
             rotation="10 MB",
         )
-    # Google logging  (https://github.com/Delgan/loguru/issues/789)
-    if CLOUD_LOGS:
-        print("Creating GCP logging client...")
-        logging_client = logging.Client()
-        gcp_logger = logging_client.logger("gcp-logger")
+    # # Google logging  (https://github.com/Delgan/loguru/issues/789)
+    # if CLOUD_LOGS:
+    #     print("Creating GCP logging client...")
+    #     logging_client = logging.Client()
+    #     gcp_logger = logging_client.logger("gcp-logger")
 
-        async def _log_to_gcp(message):
-            try:
-                logdict = _to_log_dict(message.record)
-                await asyncio.to_thread(gcp_logger.log_struct, logdict)
-            except Exception as e:
-                print(f"Error logging to GCP: {e}")
+    #     async def _log_to_gcp(message):
+    #         try:
+    #             logdict = _to_log_dict(message.record)
+    #             await gcp_logger.log_struct(logdict)
+    #         except Exception as e:
+    #             print(f"Error logging to GCP: {e}")
 
-        def log_to_gcp(message):
-            """Sends log messages to GCP logging with best effort."""
-            asyncio.ensure_future(_log_to_gcp(message))
-
-        print('Adding GCP logger...')
-        logger.add(
-            log_to_gcp,
-            level=LOG_LEVEL,
-            format="{message}",
-        )
-        print('GCP logger added.')
+logger.success("Logging configured.")

@@ -3,7 +3,6 @@
 #     - Language translation
 #     - String similarity
 
-import asyncio
 from difflib import SequenceMatcher
 import textwrap
 
@@ -12,9 +11,7 @@ from loguru import logger
 
 from moshi import Message
 
-logger.trace("Loading language module...")
 client = translate.Client()
-logger.trace("Loaded translate client.")
 
 def similar(a, b) -> float:
     """Return similarity of two strings.
@@ -23,50 +20,38 @@ def similar(a, b) -> float:
     """
     return SequenceMatcher(None, a, b).ratio()
 
-async def translate_messages(messages: list[Message], target: str) -> list[Message]:
+def translate_messages(messages: list[Message], target: str) -> list[Message]:
     """ Translate a list of messages. Timeout handled by caller. """
-    logger.trace(f"Translating {len(messages)} messages to {target}...")
-    tasks = []
-    async with asyncio.TaskGroup() as tg:  # NOTE if 1 fails (w/ non-cancel), all fail.
-        for message in messages:
-            logger.trace(f"Translating message {message} to {target}...")
-            task = tg.create_task(translate_text(message.content, target=target))
-            tasks.append(task)
-    for i, task in enumerate(tasks):
-        logger.trace(f"Task {i} is {task}")
-        val = await task
-        logger.trace(f"Task {i} returned: {val}")
-        messages[i].content = val
-        logger.trace(f"Translated message {i} to {target}: {messages[i]}")
-    logger.trace(f"Translated {len(messages)} messages to {target}.")
+    with logger.contextualize(target=target):
+        logger.trace(f"Translating {len(messages)} messages...")
+        for i, message in enumerate(messages):
+            logger.trace(f"Translating: {message}")
+            messages[i].content = translate_text(message.content, target=target)
+            logger.trace(f"Translated to: {messages[i]}")
+        logger.trace(f"Translated {len(messages)} messages.")
     return messages
 
 
-async def translate_text(text: str, target: str) -> str:
+def translate_text(text: str, target: str) -> str:
     if '-' in target:
         target = target.split('-')[0]
     assert len(target) in {2, 3}, f"Invalid target language: {target}"
-    logger.trace(f"target = {target}")
-    logger.trace(f"text = {text}")
-    try:
-        result = await asyncio.to_thread(client.translate, values=text, target_language=target)
-    except Exception as e:
-        logger.error(f"Error translating text: {e}")
-        raise
-    logger.trace(f"result = {result}")
-    return result["translatedText"]
+    with logger.contextualize(target=target):
+        logger.debug("Translation has no timeout.")
+        logger.trace(f"Translating: {textwrap.shorten(text, 64)}")
+        result = client.translate(values=text, target_language=target)
+        translated_text = result["translatedText"]
+        logger.trace(f"Translated to: {textwrap.shorten(translated_text, 64)}")
+    return translated_text
 
-async def detect_language(text: str) -> str:
+def detect_language(text: str) -> str:
     """Detects the text's language. Run setup_client first.
     Source:
         - https://cloud.google.com/translate/docs/basic/detecting-language#translate-detect-language-multiple-python
     """
     logger.debug(f"Detecting language for: {textwrap.shorten(text, 64)}")
-    # NOTE using to_thread rather than TranslationAsyncClient because later has much more complicated syntax
-    result = await asyncio.to_thread(
-        client.detect_language,
-        text,
-    )
+    logger.debug("Translation has no timeout.")
+    result = client.detect_language(text)
     conf = result["confidence"]
     lang = result["language"]
     logger.debug(f"Confidence: {conf}")

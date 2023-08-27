@@ -8,13 +8,15 @@ from pathlib import Path
 from textwrap import shorten
 
 import av
-import numpy as np
-from av import AudioFifo, AudioFrame
+from google.cloud import storage
 from loguru import logger
+import numpy as np
 
 from . import wavfile
 
-def energy(af: AudioFrame) -> float:
+storage_client = storage.Client()
+
+def energy(af: av.AudioFrame) -> float:
     """Calculate the RMS energy of an audio frame."""
     arr = af.to_ndarray()  # produces array with dtype of int16
     # NOTE int16 is too small for squares of typical signal stregth so int32 is used
@@ -24,13 +26,13 @@ def energy(af: AudioFrame) -> float:
     return energy
 
 
-def seconds(af: AudioFrame) -> float:
+def seconds(af: av.AudioFrame) -> float:
     """Calculate the length in seconds of an audio frame."""
     seconds = af.samples / af.rate
     return seconds
 
 
-def _wavb2af(wav: io.BytesIO) -> AudioFrame:
+def _wavb2af(wav: io.BytesIO) -> av.AudioFrame:
     sample_rate, arr = wavfile.read(wav)
     if len(arr.shape) == 1:
         arr = arr.reshape(-1, 1)
@@ -41,14 +43,14 @@ def _wavb2af(wav: io.BytesIO) -> AudioFrame:
     # logger.debug(f"sample_rate={sample_rate}, samples={samples}, channels={channels}, layout={layout}, planar={format.is_planar}")
     with logger.contextualize(sample_rate=sample_rate, samples=samples, channels=channels, layout=layout, planar=format.is_planar):
         try:
-            af = AudioFrame.from_ndarray(arr.ravel().reshape(1, -1), format='s16', layout=layout)
+            af = av.AudioFrame.from_ndarray(arr.ravel().reshape(1, -1), format='s16', layout=layout)
         except:
             logger.error(f"Failed to create AudioFrame from wav bytes (as hex): {shorten(wav.hex(), 100)}")
     af.rate = sample_rate
     logger.debug(f"af={af}")
     return af
 
-def _wavp2af(waf: Path) -> AudioFrame:
+def _wavp2af(waf: Path) -> av.AudioFrame:
     with open(waf, "rb") as f:
         wavb = f.read()
     return _wavb2af(wavb)
@@ -80,3 +82,15 @@ def af2wav(af: av.AudioFrame) -> io.BytesIO:
     af = af.to_ndarray()
     wav = wavfile.write(af)
     return wav
+
+def download(audio_file_location: str) -> io.BytesIO:
+    """Download an audio file from storage."""
+    bucket_name = audio_file_location.split('/')[0]
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(audio_file_location)
+    wav = io.BytesIO()
+    blob.download_to_file(wav)
+    wav.seek(0)
+    return wav
+
+logger.success("Audio module loaded.")

@@ -1,9 +1,11 @@
-import asyncio
 from datetime import datetime
 
+from google.cloud import firestore
 from loguru import logger
 
 from moshi import Message, VersionedModel, __version__ as moshi_version
+
+client = firestore.Client()
 
 def skeleton(activity_id: str, language: str) -> dict:
     transcript_payload = {
@@ -20,38 +22,41 @@ class Transcript(VersionedModel):
     language: str
     messages: list[Message]
     transcript_id: str = None
+    user_id: str = None
 
-    @property
-    def tid(self):
-        return self.transcript_id
-    
     @property
     def aid(self):
         return self.activity_id
 
-    async def add_msg(self, msg: Message):
+    @property
+    def tid(self):
+        return self.transcript_id
+
+    @property
+    def uid(self):
+        return self.user_id
+
+    def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
             logger.trace("Adding message to transcript...")
             self.messages.append(msg)
-            await self.__save()
+            self.save()
             logger.trace("Message added to transcript.")
 
 
-    async def __save(self):
+    def save(self):
         """Save the transcript to Firestore."""
+        transcript_col = client.collection("users").document(self.uid).collection("transcripts")
         if self.tid:
-            logger.info("Updating existing doc...")
-            doc_ref = transcript_col.document(self.__cid)
+            logger.trace("Updating existing doc...")
+            doc_ref = transcript_col.document(self.tid)
         else:
             logger.info("Creating new conversation document...")
             doc_ref = transcript_col.document()
-            self.__cid = doc_ref.id
-        with logger.contextualize(cid=self.__cid):
-            logger.debug(f"Saving conversation document...")
-            try:
-                await doc_ref.set(self.__transcript.asdict())
-                logger.success(f"Saved conversation document!")
-            except asyncio.CancelledError:
-                logger.debug(f"Cancelled saving conversation document.")
-
+            self.transcript_id = doc_ref.id
+        with logger.contextualize(tid=self.tid, aid=self.aid):
+            logger.trace(f"Saving conversation document...")
+            print(self.messages.asdict())
+            doc_ref.set(self.messages.asdict())
+            logger.trace(f"Saved conversation document!")
