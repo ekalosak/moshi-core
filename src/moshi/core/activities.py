@@ -10,8 +10,8 @@ from google.cloud import firestore
 from loguru import logger
 from pydantic import Field
 
-from moshi import Message, Role, VersionedModel, GOOGLE_PROJECT
-from moshi.core import user, character, transcript
+from moshi import Message, Role, VersionedModel, GOOGLE_PROJECT, user
+from moshi.core import character, transcript
 from moshi.utils import speech, lang
 
 client = firestore.Client(project=GOOGLE_PROJECT)

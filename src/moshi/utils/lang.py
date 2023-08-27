@@ -16,17 +16,6 @@ logger.trace("Loading language module...")
 client = translate.Client()
 logger.trace("Loaded translate client.")
 
-class LanguageCode(str):
-    def match(self, other: 'LanguageCode', strict=False) -> bool:
-        """Match the language codes if self is a subset of other."""
-        if strict:
-            if len(self) == 2:
-                return self == other[0:2]
-            else:
-                return self == other
-        else:
-            return self.split('-')[0] == other.split('-')[0]
-
 def similar(a, b) -> float:
     """Return similarity of two strings.
     Source:

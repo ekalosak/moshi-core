@@ -32,6 +32,14 @@ def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
         return False
 
 
+async def list_voices() -> list[tts.Voice]:
+    """List all voices supported by the API."""
+    response = await asyncio.wait_for(
+        aclient.list_voices(),
+        timeout=GOOGLE_VOICE_SELECTION_TIMEOUT,
+    )
+    return response.voices
+
 async def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     """Get a valid voice for the language. Just picks the first match.
     Args:
@@ -96,11 +104,12 @@ async def _synthesize_af(text: str, voice: tts.Voice, rate: int = 24000) -> av.A
     audio_frame = audio.wav2af(audio_bytes)
     return audio_frame
 
-async def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame") -> av.AudioFrame | str:
+async def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame") -> av.AudioFrame | bytes | str:
     """Synthesize speech to an AudioFrame or Storage.
     Returns:
         - AudioFrame if to == "audio_frame"
         - Storage id if to == "storage"
+        - bytes if to == "bytes"
     Raises:
         - ValueError if to is invalid.
     """
@@ -109,6 +118,8 @@ async def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_f
     elif to == "storage":
         audio_bytes = await _synthesize_bytes(text, voice, rate)
         return await audio.upload_audio(audio_bytes)
+    elif to == "bytes":
+        return await _synthesize_bytes(text, voice, rate)
     else:
         raise ValueError(f"Invalid value for 'to': {to}")
 
