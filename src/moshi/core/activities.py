@@ -12,6 +12,7 @@ from pydantic import Field
 from moshi import Message, Role, VersionedModel, user
 from moshi.core import character, transcript
 from moshi.utils import speech, lang
+from moshi.utils.audio import AUDIO_BUCKET
 
 client = firestore.Client()
 
@@ -171,25 +172,23 @@ class BaseActivity(ABC, VersionedModel):
         activity._uid = uid
         return activity
 
-    def respond(self, usr_sid: str) -> str:
+    def respond(self, usr_audio_storage_name: str) -> str:
         """Main loop iter. From the user's audio, transcribe it, get the character's response, and synthesize it to audio.
-        Args:
-            usr_sid: the storage id for the user's audio.
         Returns:
             The storage id for the character's response audio.
         """
-        logger.trace(f"Responding to: {usr_sid}")
+        logger.trace(f"Responding to: {usr_audio_storage_name}")
         if not self._aid or not self._tid:
             raise NotCreatedError("Activity not created.")
-        usr_txt = speech.transcribe(usr_sid, self.language)
-        usr_msg = Message(role=Role.USR, content=usr_txt)
+        usr_txt = speech.transcribe(usr_audio_storage_name, self.language)
+        usr_msg = Message(role=Role.USR, content=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(usr_msg)
         ast_txt = self._character.complete(self._transcript)
-        ast_msg = Message(role=Role.AST, content=ast_txt)
+        ast_audio_storage_name = speech.synthesize(ast_txt, self.voice, to="storage")
+        ast_msg = Message(role=Role.AST, content=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order
-        ast_sid = speech.synthesize(ast_txt, self.voice, to="storage")
-        logger.trace(f"Responded to: {usr_sid}")
-        return ast_sid
+        logger.trace(f"Responded to: {usr_audio_storage_name}")
+        return ast_audio_storage_name
 
 class Unstructured(BaseActivity):
     type: Literal[ActivityType.UNSTRUCTURED] = ActivityType.UNSTRUCTURED

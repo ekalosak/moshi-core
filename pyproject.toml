@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "av",
-  "firebase_admin",
+  "firebase-admin",
   "google-auth",
   "google-cloud-firestore",
   "google-cloud-logging",

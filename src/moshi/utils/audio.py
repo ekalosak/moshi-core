@@ -4,7 +4,9 @@
 - seconds: calculate the length in seconds of an audio frame
 """
 import io
+import os
 from pathlib import Path
+import tempfile
 from textwrap import shorten
 
 import av
@@ -13,6 +15,9 @@ from loguru import logger
 import numpy as np
 
 from . import wavfile
+
+AUDIO_BUCKET = os.getenv("AUDIO_BUCKET", "moshi-3.appspot.com")  # NOTE default is emulator bucket
+logger.info(f"AUDIO_BUCKET={AUDIO_BUCKET}")
 
 storage_client = storage.Client()
 
@@ -83,14 +88,23 @@ def af2wav(af: av.AudioFrame) -> io.BytesIO:
     wav = wavfile.write(af)
     return wav
 
-def download(audio_file_location: str) -> io.BytesIO:
-    """Download an audio file from storage."""
-    bucket_name = audio_file_location.split('/')[0]
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(audio_file_location)
-    wav = io.BytesIO()
-    blob.download_to_file(wav)
-    wav.seek(0)
-    return wav
+def download(audio_path: str) -> str:
+    """Download an audio file from storage to a local temporary file.
+    Caller is responsible for deleting the temporary file.
+    Returns:
+        tfn: the path to the temporary file.
+    """
+    logger.trace("Downloading audio file...")
+    logger.debug(f"audio_path={audio_path}")
+    with logger.contextualize(audio_bucket=AUDIO_BUCKET, audio_path=audio_path):
+        logger.trace("Creating objects...")
+        afl = Path(audio_path)
+        _, tfn = tempfile.mkstemp(suffix=afl.suffix, prefix=afl.stem, dir='/tmp')
+        bucket = storage_client.bucket(AUDIO_BUCKET)
+        blob = bucket.blob(audio_path)
+        logger.trace("Downloading bytes...")
+        blob.download_to_filename(tfn)
+        logger.trace("Downloaded audio file.")
+    return tfn
 
 logger.success("Audio module loaded.")

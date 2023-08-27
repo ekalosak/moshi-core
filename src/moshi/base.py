@@ -10,22 +10,26 @@ class VersionedModel(BaseModel):
     created_at: datetime.datetime = datetime.datetime.now()
     moshi_version: str = moshi_version
 
-    # def __post_init__(self):
-    #     # TODO can these be moved to the dataclass-like init above?
-    #     self.moshi_version = self.moshi_version or moshi_version
-    #     self.created_at = self.created_at or datetime.datetime.now()
-
 class Role(str, Enum):
     SYS = "sys"
     USR = "usr"
     AST = "ast"
 
+class AudioStorage(BaseModel):
+    """Where the audio for a message is stored."""
+    path: str
+    bucket: str = None
+
+class Translation(BaseModel):
+    text: str
+    language: str
+    # audio: AudioStorage | None = None
 
 class Message(VersionedModel):
     role: Role
     content: str
-    translation: str = None
-    sid: str = None  # NOTE storage id for audio
+    audio: AudioStorage | None = None
+    translation: Translation | None = None
 
 # TODO Model(ABC, str, Enum), ChatModel(Model), CompletionModel(Model)
 class ModelType(str, Enum):

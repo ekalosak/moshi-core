@@ -3,11 +3,14 @@ The main entrypoint is `synthesize` which takes a string and returns an AudioFra
 """
 import io
 import os
+from pathlib import Path
+from textwrap import shorten
 
 import av
-import openai
 from google.cloud import texttospeech as tts
+import iso639
 from loguru import logger
+import openai
 
 from . import audio
 from moshi.utils import secrets
@@ -18,8 +21,6 @@ OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1"
 logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT} OPENAI_TRANSCRIPTION_MODEL={OPENAI_TRANSCRIPTION_MODEL}")
 
 client = tts.TextToSpeechClient()
-
-logger.success("Speech module loaded.")
 
 def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
     if g1.lower() == "female" and g2 == 2:
@@ -110,28 +111,60 @@ def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame")
         raise ValueError(f"Invalid value for 'to': {to}")
 
 def _transcribe_audio_buffer(buf: io.BytesIO, language: str = None) -> str:
-    logger.warning("Transcription has no timeout.")
+    logger.debug("Transcription has no timeout.")
+    buf.name = 'dummy'
     transcript = openai.Audio.transcribe(
         OPENAI_TRANSCRIPTION_MODEL, buf, language=language
     )
     logger.debug(f"Transcript: {transcript}")
     return transcript["text"]
 
-def _transcribe_af(audio_frame: av.AudioFrame, language: str = None) -> str:
+def _transcribe_audio_file(fp: Path | str, language: str = None) -> str:
+    logger.debug("Transcription has no timeout.")
+    logger.trace(f"Transcribing: {fp}")
+    with open(fp, "rb") as f:
+        transcript = openai.Audio.transcribe(
+            OPENAI_TRANSCRIPTION_MODEL, f, language=language
+        )
+    text = transcript['text']
+    transcript.pop('text')
+    with logger.contextualize(transcript=transcript.to_dict()):
+        logger.log("TRANSCRIPT", shorten(text, 96))
+    return text
+
+
+def _transcribe_audio_frame(audio_frame: av.AudioFrame, language: str = None) -> str:
     buf = audio.af2wav(audio_frame)
     return _transcribe_audio_buffer(buf, language)
 
+def _parse_to_iso639_1(language: str) -> str:
+    iso = language.split("-")[0] if '-' in language else language
+    lan = iso639.Language.match(iso)
+    if lan is None:
+        raise ValueError(f"Could not parse language: {language}")
+    return lan.part1
+
 def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
-    """Transcribe audio to text.
+    """Transcribe audio to text. OpenAI requires ISO-639-1 ('en', 'es', 'fr', etc.).
     Args:
         - audio: either an AudioFrame or a storage id.
     """
     secrets.login_openai()
+    language = _parse_to_iso639_1(language)
     if isinstance(aud, av.AudioFrame):
-        return _transcribe_af(aud, language)
+        return _transcribe_audio_frame(aud, language)
     elif isinstance(aud, str):
         with logger.contextualize(aud=aud):
-            logger.trace(f"Getting audio from storage...")
-            buf = audio.download(aud)
-            logger.trace(f"Audio retrieved from storage")
-        return _transcribe_audio_buffer(buf, language)
+            logger.trace("Retrieving audio from storage...")
+            fn = audio.download(aud)
+            with logger.contextualize(fn=fn):
+                try:
+                    logger.trace("Audio retrieved from storage.")
+                    fp = Path(fn)
+                    transcription = _transcribe_audio_file(fp, language)
+                finally:
+                    logger.trace("Removing temporary file.")
+                    os.remove(fn)
+        return transcription
+
+logger.success("Speech module loaded.")
