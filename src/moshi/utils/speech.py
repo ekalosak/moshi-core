@@ -18,8 +18,17 @@ GOOGLE_VOICE_SELECTION_TIMEOUT = int(os.getenv("GOOGLE_VOICE_SELECTION_TIMEOUT",
 OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
 logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT} OPENAI_TRANSCRIPTION_MODEL={OPENAI_TRANSCRIPTION_MODEL}")
 
-client = tts.TextToSpeechClient()
-aclient = tts.TextToSpeechAsyncClient()
+try:
+    client = tts.TextToSpeechAsyncClient()
+except RuntimeError as e:
+    logger.debug(f"RuntimeError: {e}")
+    logger.warning("Couldn't initialize async client. Only expect this if your entrypoint is not asyncio.run().")
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    client = tts.TextToSpeechAsyncClient()
 
 logger.success("Speech module loaded.")
 
@@ -35,7 +44,7 @@ def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
 async def list_voices() -> list[tts.Voice]:
     """List all voices supported by the API."""
     response = await asyncio.wait_for(
-        aclient.list_voices(),
+        client.list_voices(),
         timeout=GOOGLE_VOICE_SELECTION_TIMEOUT,
     )
     return response.voices
@@ -52,8 +61,7 @@ async def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     """
     logger.trace(f"Getting voice for lang code: {langcode}")
     response = await asyncio.wait_for(
-        # asyncio.to_thread(client.list_voices, language_code=langcode),
-        aclient.list_voices(language_code=langcode),
+        client.list_voices(language_code=langcode),
         timeout=GOOGLE_VOICE_SELECTION_TIMEOUT,
     )
     voices = response.voices
@@ -92,8 +100,7 @@ async def _synthesize_bytes(text: str, voice: tts.Voice, rate: int = 24000) -> b
         audio_config=audio_config,
     )
     response = await asyncio.wait_for(
-        # asyncio.to_thread(client.synthesize_speech, request=request),
-        aclient.synthesize_speech(request=request),
+        client.synthesize_speech(request=request),
         timeout=GOOGLE_SPEECH_SYNTHESIS_TIMEOUT,
     )
     return response.audio_content

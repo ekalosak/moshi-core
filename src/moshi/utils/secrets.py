@@ -1,19 +1,28 @@
 import asyncio
-import functools
 import os
 
+from google.auth import default
 from google.cloud import secretmanager
 from loguru import logger
 import openai
 
-from moshi import GOOGLE_PROJECT
-
 SECRET_TIMEOUT = os.getenv("MOSHISECRETTIMEOUT", 2)
 OPENAI_APIKEY_SECRET = os.getenv("OPENAI_APIKEY_SECRET", "openai-apikey-0")
-logger.info(f"OPENAI_APIKEY_SECRET={OPENAI_APIKEY_SECRET} SECRET_TIMEOUT={SECRET_TIMEOUT}")
+_, GOOGLE_PROJECT = default()
+logger.info(f"OPENAI_APIKEY_SECRET={OPENAI_APIKEY_SECRET} SECRET_TIMEOUT={SECRET_TIMEOUT} GOOGLE_PROJECT={GOOGLE_PROJECT}")
 
-# client = secretmanager.SecretManagerServiceAsyncClient()  # NOTE firebase functions can't use async
-client = secretmanager.SecretManagerServiceClient()
+# This allows us to use the secrets module in a synchronous context.
+try:
+    client = secretmanager.SecretManagerServiceAsyncClient()
+except RuntimeError as e:
+    logger.debug(f"RuntimeError: {e}")
+    logger.warning("Couldn't initialize async client. Only expect this if your entrypoint is not asyncio.run().")
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    client = secretmanager.SecretManagerServiceAsyncClient()
 logger.success("Secrets module loaded.")
 
 # functools.lru_cache(maxsize=8)
@@ -29,11 +38,7 @@ async def get_secret(
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     logger.debug(f"Constructed name: {name}")
     response = await asyncio.wait_for(
-        asyncio.to_thread(
-            client.access_secret_version,
-            request={"name": name},
-        ),
-        # client.access_secret_version(request={"name": name}),
+        client.access_secret_version(request={"name": name}),
         timeout=SECRET_TIMEOUT,
     )
     logger.info(f"Retrieved secret: {response.name}")

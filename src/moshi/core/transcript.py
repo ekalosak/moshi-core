@@ -7,7 +7,7 @@ from moshi import Message, VersionedModel, __version__ as moshi_version
 
 def skeleton(activity_id: str, language: str) -> dict:
     transcript_payload = {
-        'aid': activity_id,
+        'activity_id': activity_id,
         'language': language,  # NOTE redundant by activity
         'messages': [],
         'created_at': datetime.now(),
@@ -16,10 +16,18 @@ def skeleton(activity_id: str, language: str) -> dict:
     return transcript_payload
 
 class Transcript(VersionedModel):
-    aid: str
+    activity_id: str
     language: str
     messages: list[Message]
-    tid: str = None
+    transcript_id: str = None
+
+    @property
+    def tid(self):
+        return self.transcript_id
+    
+    @property
+    def aid(self):
+        return self.activity_id
 
     async def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
@@ -28,6 +36,7 @@ class Transcript(VersionedModel):
             self.messages.append(msg)
             await self.__save()
             logger.trace("Message added to transcript.")
+
 
     async def __save(self):
         """Save the transcript to Firestore."""
