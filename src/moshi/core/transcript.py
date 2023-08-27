@@ -21,12 +21,12 @@ class Transcript(VersionedModel):
     messages: list[Message]
     tid: str = None
 
-    def add_msg(self, msg: Message):
+    async def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
             logger.trace("Adding message to transcript...")
             self.messages.append(msg)
-            self.__save()
+            await self.__save()
             logger.trace("Message added to transcript.")
 
     async def __save(self):

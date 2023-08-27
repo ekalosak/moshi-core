@@ -25,7 +25,7 @@ class Message(VersionedModel):
     role: Role
     content: str
     translation: str = None
-    audio: bytes = None
+    sid: str = None  # NOTE storage id for audio
 
 # TODO Model(ABC, str, Enum), ChatModel(Model), CompletionModel(Model)
 class ModelType(str, Enum):

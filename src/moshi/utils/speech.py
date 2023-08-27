@@ -18,8 +18,8 @@ GOOGLE_VOICE_SELECTION_TIMEOUT = int(os.getenv("GOOGLE_VOICE_SELECTION_TIMEOUT",
 OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
 logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT} OPENAI_TRANSCRIPTION_MODEL={OPENAI_TRANSCRIPTION_MODEL}")
 
-# client = tts.TextToSpeechAsyncClient()  # NOTE for some reason the async client closes the event loop in testing, so we use the sync client.
 client = tts.TextToSpeechClient()
+aclient = tts.TextToSpeechAsyncClient()
 
 logger.success("Speech module loaded.")
 
@@ -44,7 +44,8 @@ async def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     """
     logger.trace(f"Getting voice for lang code: {langcode}")
     response = await asyncio.wait_for(
-        asyncio.to_thread(client.list_voices, language_code=langcode),
+        # asyncio.to_thread(client.list_voices, language_code=langcode),
+        aclient.list_voices(language_code=langcode),
         timeout=GOOGLE_VOICE_SELECTION_TIMEOUT,
     )
     voices = response.voices
@@ -59,7 +60,7 @@ async def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     )
 
 
-async def _synthesize_speech_bytes(text: str, voice: tts.Voice, rate: int = 24000) -> bytes:
+async def _synthesize_bytes(text: str, voice: tts.Voice, rate: int = 24000) -> bytes:
     """Synthesize speech to a bytestring in WAV (PCM_16) format.
     Implemented with tts.googleapis.com;
     """
@@ -83,33 +84,50 @@ async def _synthesize_speech_bytes(text: str, voice: tts.Voice, rate: int = 2400
         audio_config=audio_config,
     )
     response = await asyncio.wait_for(
-        asyncio.to_thread(client.synthesize_speech, request=request),
+        # asyncio.to_thread(client.synthesize_speech, request=request),
+        aclient.synthesize_speech(request=request),
         timeout=GOOGLE_SPEECH_SYNTHESIS_TIMEOUT,
     )
     return response.audio_content
 
 
-async def synthesize(text: str, voice: tts.Voice, rate: int = 24000) -> av.AudioFrame:
-    audio_bytes = await _synthesize_speech_bytes(text, voice, rate)
+async def _synthesize_af(text: str, voice: tts.Voice, rate: int = 24000) -> av.AudioFrame:
+    audio_bytes = await _synthesize_bytes(text, voice, rate)
     audio_frame = audio.wav2af(audio_bytes)
     return audio_frame
 
+async def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame") -> av.AudioFrame | str:
+    """Synthesize speech to an AudioFrame or Storage.
+    Returns:
+        - AudioFrame if to == "audio_frame"
+        - Storage id if to == "storage"
+    Raises:
+        - ValueError if to is invalid.
+    """
+    if to == "audio_frame":
+        return await _synthesize_af(text, voice, rate)
+    elif to == "storage":
+        audio_bytes = await _synthesize_bytes(text, voice, rate)
+        return await audio.upload_audio(audio_bytes)
+    else:
+        raise ValueError(f"Invalid value for 'to': {to}")
 
-async def transcribe(audio_frame: av.AudioFrame, language: str = None) -> str:
-    await secrets.login_openai()
-    # _, fp = tempfile.mkstemp(suffix=".wav")
-    # try:
-    #     audio.write_audio_frame_to_wav(audio_frame, fp)
-    #     with open(fp, "rb") as f:
-    #         transcript = await openai.Audio.atranscribe(
-    #             OPENAI_TRANSCRIPTION_MODEL, f, language=language
-    #         )
-    # finally:
-    #     os.remove(fp)
-    # return transcript["text"]
+async def _transcribe_af(audio_frame: av.AudioFrame, language: str = None) -> str:
     buf = audio.af2wav(audio_frame)
     transcript = await openai.Audio.atranscribe(
         OPENAI_TRANSCRIPTION_MODEL, buf, language=language
     )
     logger.debug(f"Transcript: {transcript}")
     return transcript["text"]
+
+async def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
+    """Transcribe audio to text.
+    Args:
+        - audio: either an AudioFrame or a storage id.
+    """
+    await secrets.login_openai()
+    if isinstance(aud, av.AudioFrame):
+        return await _transcribe_af(aud, language)
+    elif isinstance(aud, str):
+        af = await audio.get_audio_frame(aud)
+        return await _transcribe_af(af, language)

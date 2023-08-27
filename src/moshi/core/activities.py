@@ -1,9 +1,10 @@
-"""Create initial prompt for a an unstructured conversation."""
+"""Operate the Activity using this module. Create, continue, and enrich the conversation."""
 from abc import ABC, abstractmethod
 import asyncio
 import datetime
 from enum import Enum
 from typing import Annotated, Literal, Union
+from pathlib import Path
 
 from google.cloud import firestore
 from loguru import logger
@@ -14,6 +15,7 @@ from moshi.core import user, character, transcript
 from moshi.utils import speech, lang
 
 client = firestore.Client(project=GOOGLE_PROJECT)
+aclient = firestore.AsyncClient(project=GOOGLE_PROJECT)
 
 logger.success("Activities module loaded.")
 
@@ -60,7 +62,7 @@ class BaseActivity(ABC, VersionedModel):
     def aid(self):
         return self._aid
 
-    def create_doc(self) -> firestore.DocumentReference:
+    async def create_doc(self) -> firestore.DocumentReference:
         """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
         activity_payload = self.model_dump()
         if self.language.startswith("en"):
@@ -69,9 +71,9 @@ class BaseActivity(ABC, VersionedModel):
             prompt = self.translate_prompt()
         prompt = [msg.model_dump() for msg in prompt]
         activity_payload["prompt"] = prompt
-        activity_collection = client.collection("activities")
+        activity_collection = aclient.collection("activities")
         activity_doc = activity_collection.document()
-        activity_doc.set(activity_payload)
+        await activity_doc.set(activity_payload)
         return activity_doc
 
     def init_activity(self):
@@ -148,14 +150,24 @@ class BaseActivity(ABC, VersionedModel):
             return
         raise NotImplementedError
 
-    def respond(self, sid: str):
-        """Main loop iter. Listen -> think -> respond -> speak.
+    async def respond(self, usr_sid: str) -> str:
+        """Main loop iter. From the user's audio, transcribe it, get the character's response, and synthesize it to audio.
         Args:
-            sid: the storage id for the user's audio.
+            usr_sid: the storage id for the user's audio.
+        Returns:
+            The storage id for the character's response audio.
         """
+        logger.trace(f"Responding to: {usr_sid}")
         self.load()
-        # read the object with id <sid> from gcloud storage
-
+        usr_txt = await speech.transcribe(usr_sid, self.language)
+        usr_msg = Message(role=Role.USR, content=usr_txt)
+        await self._transcript.add_msg(usr_msg)
+        ast_txt = self._character.complete(self._transcript)
+        ast_msg = Message(role=Role.AST, content=ast_txt)
+        await self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order
+        ast_sid = await speech.synthesize(ast_txt, self.voice, to="storage")
+        logger.trace(f"Responded to: {usr_sid}")
+        return ast_sid
 
 class Unstructured(BaseActivity):
     type: Literal[ActivityType.UNSTRUCTURED] = ActivityType.UNSTRUCTURED
