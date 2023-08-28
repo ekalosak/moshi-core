@@ -12,10 +12,11 @@ from loguru import logger
 from moshi import Message, Model, ModelType, Role
 from moshi.utils import secrets
 
+STOP_TOKENS = os.getenv("OPENAI_STOP_TOKENS", ["\n", "1:", "2:"])
 OPENAI_COMPLETION_MODEL = Model(
     os.getenv("OPENAI_COMPLETION_MODEL", "text-davinci-002")
 )
-logger.info(f"OPENAI_COMPLETION_MODEL={OPENAI_COMPLETION_MODEL}")
+logger.info(f"OPENAI_COMPLETION_MODEL={OPENAI_COMPLETION_MODEL} STOP_TOKENS={STOP_TOKENS}")
 
 ChatCompletionPayload = NewType("ChatCompletionPayload", list[dict[str, str]])
 CompletionPayload = NewType("CompletionPayload", str)
@@ -117,6 +118,7 @@ def _completion(
         model=model,
         prompt=payload,
         n=n,
+        stop=STOP_TOKENS,
         **kwargs,
     )
     logger.debug(f"response:\n{pformat(response)}")
@@ -146,25 +148,28 @@ def from_assistant(
     Details on args:
         https://platform.openai.com/docs/api-reference/chat/create
     """
-    if isinstance(messages, Message):
-        messages = [messages]
-    assert n > 0 and isinstance(n, int)
-    if n > 1:
-        logger.warning(f"Generating many responses at once can be costly: n={n}")
-    secrets.login_openai()
-    msg_contents = []
-    if user:
-        kwargs["user"] = user
-    if _get_type_of_model(model) == ModelType.CHAT:
-        payload = _chat_completion_payload_from_messages(messages)
-        msg_contents = _chat_completion(payload, n, model, **kwargs)
-    elif _get_type_of_model(model) == ModelType.COMP:
-        payload = _completion_payload_from_messages(messages)
-        msg_contents = _completion(payload, n, model, **kwargs)
-    else:
-        raise TypeError(f"Model not supported: {model}")
-    assert isinstance(msg_contents, list)
-    assert all(isinstance(mc, str) for mc in msg_contents)
-    return msg_contents
+    with logger.contextualize(nmsg=len(messages), n=n, model=model, user=user, **kwargs):
+        if isinstance(messages, Message):
+            messages = [messages]
+        assert n > 0 and isinstance(n, int)
+        if n > 1:
+            logger.warning(f"Generating many responses at once can be costly: n={n}")
+        secrets.login_openai()
+        msg_contents = []
+        if user:
+            kwargs["user"] = user
+        logger.trace("Getting LLM response...")
+        if _get_type_of_model(model) == ModelType.CHAT:
+            payload = _chat_completion_payload_from_messages(messages)
+            msg_contents = _chat_completion(payload, n, model, **kwargs)
+        elif _get_type_of_model(model) == ModelType.COMP:
+            payload = _completion_payload_from_messages(messages)
+            msg_contents = _completion(payload, n, model, **kwargs)
+        else:
+            raise TypeError(f"Model not supported: {model}")
+        logger.trace("LLM response received.")
+        assert isinstance(msg_contents, list)
+        assert all(isinstance(mc, str) for mc in msg_contents)
+        return msg_contents
 
 logger.success("Completion module loaded.")

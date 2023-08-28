@@ -14,6 +14,7 @@ import openai
 
 from . import audio
 from moshi.utils import secrets
+from moshi.utils.log import traced
 
 GOOGLE_SPEECH_SYNTHESIS_TIMEOUT = int(os.getenv("GOOGLE_SPEECH_SYNTHESIS_TIMEOUT", 5))
 GOOGLE_VOICE_SELECTION_TIMEOUT = int(os.getenv("GOOGLE_VOICE_SELECTION_TIMEOUT", 5))
@@ -39,7 +40,7 @@ def list_voices() -> list[tts.Voice]:
 def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     """Get a valid voice for the language. Just picks the first match.
     Args:
-        - langcode: e.g. "en-US"
+        - langcode: in BPC 47 format e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
     Raises:
         - ValueError if no voice found.
     Source:
@@ -63,52 +64,56 @@ def _synthesize_bytes(text: str, voice: tts.Voice, rate: int = 24000) -> bytes:
     """Synthesize speech to a bytestring in WAV (PCM_16) format.
     Implemented with tts.googleapis.com;
     """
+    logger.debug(f"text={text} voice={voice} rate={rate}")
     synthesis_input = tts.SynthesisInput(text=text)
     audio_config = tts.AudioConfig(
         audio_encoding=tts.AudioEncoding.LINEAR16,  # NOTE fixed s16 format
         sample_rate_hertz=rate,
     )
     langcode = voice.language_codes[0]
-    logger.debug(f"Extracted language code from voice: {langcode}")
+    logger.trace(f"Extracted language code from voice: {langcode}")
     voice_selector = tts.VoiceSelectionParams(
         name=voice.name,
         language_code=langcode,
         ssml_gender=voice.ssml_gender,
     )
     with logger.contextualize(voice_selector=voice_selector, audio_config=audio_config):
-        logger.debug(f"Synthesizing speech for: {synthesis_input}")
-    request = dict(
-        input=synthesis_input,
-        voice=voice_selector,
-        audio_config=audio_config,
-    )
-    response = client.synthesize_speech(request=request, timeout=GOOGLE_SPEECH_SYNTHESIS_TIMEOUT)
+        logger.trace(f"Synthesizing speech for: {synthesis_input}")
+        request = dict(
+            input=synthesis_input,
+            voice=voice_selector,
+            audio_config=audio_config,
+        )
+        response = client.synthesize_speech(request=request, timeout=GOOGLE_SPEECH_SYNTHESIS_TIMEOUT)
+        logger.trace(f"Synthesized speech: {len(response.audio_content)} bytes")
     return response.audio_content
-
 
 def _synthesize_af(text: str, voice: tts.Voice, rate: int = 24000) -> av.AudioFrame:
     audio_bytes = _synthesize_bytes(text, voice, rate)
     audio_frame = audio.wav2af(audio_bytes)
     return audio_frame
 
-def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame") -> av.AudioFrame | bytes | str:
+@traced
+def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame") -> av.AudioFrame | bytes:
     """Synthesize speech to an AudioFrame or Storage.
     Returns:
-        - AudioFrame if to == "audio_frame"
-        - Storage id if to == "storage"
-        - bytes if to == "bytes"
+        - AudioFrame: if to == "audio_frame"
+        - bytes: raw WAV format audio if to == "bytes"
     Raises:
         - ValueError if to is invalid.
     """
-    if to == "audio_frame":
-        return _synthesize_af(text, voice, rate)
-    elif to == "storage":
-        audio_bytes = _synthesize_bytes(text, voice, rate)
-        return audio.upload_audio(audio_bytes)
-    elif to == "bytes":
-        return _synthesize_bytes(text, voice, rate)
-    else:
-        raise ValueError(f"Invalid value for 'to': {to}")
+    with logger.contextualize(text=text, voice=voice, rate=rate, to=to):
+        logger.trace("[START] Synthesizing speech.")
+        if to == "audio_frame":
+            result = _synthesize_af(text, voice, rate)
+        elif to == "bytes":
+            result = _synthesize_bytes(text, voice, rate)
+        else:
+            raise ValueError(f"Invalid value for 'to': {to}")
+        logger.trace(f"synthesized speech: {type(result)}")
+        assert isinstance(result, (av.AudioFrame, bytes, str))
+        logger.trace("[END] Synthesizing speech.")
+    return result
 
 def _transcribe_audio_buffer(buf: io.BytesIO, language: str = None) -> str:
     logger.debug("Transcription has no timeout.")
@@ -120,8 +125,8 @@ def _transcribe_audio_buffer(buf: io.BytesIO, language: str = None) -> str:
     return transcript["text"]
 
 def _transcribe_audio_file(fp: Path | str, language: str = None) -> str:
+    logger.trace(f"[START] Transcribing: {fp}")
     logger.debug("Transcription has no timeout.")
-    logger.trace(f"Transcribing: {fp}")
     with open(fp, "rb") as f:
         transcript = openai.Audio.transcribe(
             OPENAI_TRANSCRIPTION_MODEL, f, language=language
@@ -130,6 +135,7 @@ def _transcribe_audio_file(fp: Path | str, language: str = None) -> str:
     transcript.pop('text')
     with logger.contextualize(transcript=transcript.to_dict()):
         logger.log("TRANSCRIPT", shorten(text, 96))
+    logger.trace(f"[END] Transcribing: {fp}")
     return text
 
 
@@ -144,15 +150,20 @@ def _parse_to_iso639_1(language: str) -> str:
         raise ValueError(f"Could not parse language: {language}")
     return lan.part1
 
+@traced
 def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
     """Transcribe audio to text. OpenAI requires ISO-639-1 ('en', 'es', 'fr', etc.).
     Args:
         - audio: either an AudioFrame or a storage id.
+        - language: if provided, transcribe to that language; else, autodetect
     """
+    logger.trace("[START] Transcribing audio.")
+    if not language:
+        logger.warning("Using language auto-detection; accuracy will be degraded.")
     secrets.login_openai()
     language = _parse_to_iso639_1(language)
     if isinstance(aud, av.AudioFrame):
-        return _transcribe_audio_frame(aud, language)
+        result = _transcribe_audio_frame(aud, language)
     elif isinstance(aud, str):
         with logger.contextualize(aud=aud):
             logger.trace("Retrieving audio from storage...")
@@ -165,6 +176,10 @@ def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
                 finally:
                     logger.trace("Removing temporary file.")
                     os.remove(fn)
-        return transcription
+        result = transcription.strip()
+    else:
+        raise ValueError(f"Invalid type for audio: {type(aud)}")
+    logger.trace("[END] Transcribing audio.")
+    return result
 
 logger.success("Speech module loaded.")

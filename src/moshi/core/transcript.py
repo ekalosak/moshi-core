@@ -17,7 +17,7 @@ def skeleton(activity_id: str, language: str) -> dict:
     }
     return transcript_payload
 
-def _message_to_payload(msg: Message) -> dict:
+def message_to_payload(msg: Message) -> dict:
     """Convert a list of messages to a list of dicts."""
     msg = msg.model_dump()
     if 'moshi_version' in msg:
@@ -71,6 +71,6 @@ class Transcript(VersionedModel):
             self.transcript_id = doc_ref.id
         with logger.contextualize(tid=self.tid, aid=self.aid):
             logger.trace(f"Saving conversation document...")
-            payload = _message_to_payload(msg)
+            payload = message_to_payload(msg)
             doc_ref.update({"messages": firestore.ArrayUnion([payload])})
             logger.trace(f"Saved conversation document.")

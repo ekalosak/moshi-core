@@ -1,8 +1,11 @@
 """Operate the Activity using this module. Create, continue, and enrich the conversation."""
 from abc import ABC, abstractmethod
 from enum import Enum
+import os
 from pprint import pformat
+from pathlib import Path
 from typing import Annotated, Literal, Union
+import tempfile
 
 from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter
@@ -11,8 +14,9 @@ from pydantic import Field
 
 from moshi import Message, Role, VersionedModel, user
 from moshi.core import character, transcript
-from moshi.utils import speech, lang
+from moshi.utils import audio, speech, lang
 from moshi.utils.audio import AUDIO_BUCKET
+from moshi.utils.log import traced
 
 client = firestore.Client()
 
@@ -34,6 +38,7 @@ class BaseActivity(ABC, VersionedModel):
     _tid: str = None
     _uid: str = None
     _transcript: transcript.Transcript = None
+    _prompt: list[Message] = None
     _character: character.Character = None
 
     @abstractmethod
@@ -60,20 +65,23 @@ class BaseActivity(ABC, VersionedModel):
     def aid(self):
         return self._aid
 
+    @traced
     def create_doc(self) -> firestore.DocumentReference:
         """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
         activity_payload = self.model_dump()
         if self.language.startswith("en"):
             prompt = self._get_base_prompt()
         else:
-            prompt = self.translate_prompt()
-        prompt = [msg.model_dump() for msg in prompt]
+            # prompt = self.translate_prompt()
+            prompt = lang.translate_messages(self._get_base_prompt(), self.language)
+        prompt = [transcript.message_to_payload(msg) for msg in prompt]
         activity_payload["prompt"] = prompt
         activity_collection = client.collection("activities")
         activity_doc = activity_collection.document()
         activity_doc.set(activity_payload)
         return activity_doc
 
+    @traced
     def init_activity(self):
         """Get the document for this activity in the desired language. If it doesn't exist, create it."""
         logger.trace("Getting activity doc...")
@@ -89,30 +97,23 @@ class BaseActivity(ABC, VersionedModel):
             logger.info("Creating new activity doc...")
             activity_doc = self.create_doc()
             logger.success("Created new activity doc.")
-        logger.trace("Got activity doc.")
         self._aid = activity_doc.id
+        self._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
+        logger.trace("Got activity doc.")
 
-    def translate_prompt(self) -> list[Message]:
-        """Translate the prompt into the user's target language.
-        NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
-        """
-        with logger.contextualize(activity_type=self.type.value, language=self.language):
-            logger.trace("Translating prompt...")
-            prompt = lang.translate_messages(self._get_base_prompt(), self.language)
-            pretty_prompt = pformat([msg.content for msg in prompt])
-            logger.info(f"Translated prompt: {pretty_prompt}")
-            logger.trace(f"Translated prompt.")
-        return prompt
+    # def translate_prompt(self) -> list[Message]:
+    #     """Translate the prompt into the user's target language.
+    #     NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
+    #     """
+    #     with logger.contextualize(activity_type=self.type.value, language=self.language):
+    #         logger.trace("Translating prompt...")
+    #         prompt = lang.translate_messages(self._get_base_prompt(), self.language)
+    #         pretty_prompt = pformat([msg.content for msg in prompt])
+    #         logger.info(f"Translated prompt: {pretty_prompt}")
+    #         logger.trace(f"Translated prompt.")
+    #     return prompt
 
-    def init_character(self):
-        """Initialize the character for this conversation."""
-        logger.debug(f"Creating character...")
-        logger.trace("Getting voice")
-        voice = speech.get_voice(self.language)
-        logger.debug(f"Selected voice: {voice}")
-        self._character = character.Character(voice)
-        logger.debug(f"Character initialized: {self.__haracter}")
-
+    @traced
     def init_transcript(self, uid: str):
         """Create a skeleton transcript document in Firestore for the user.
         Raises:
@@ -126,6 +127,7 @@ class BaseActivity(ABC, VersionedModel):
         transcript_doc_ref.set(transcript.skeleton(self._aid, self.language))
         self._tid = transcript_doc_ref.id
 
+    @traced
     def start(self, usr: user.User):
         """This is a new coversation, so initialize the transcript skeleton.
         The tid and aid are initialized in this function, in place.
@@ -137,19 +139,21 @@ class BaseActivity(ABC, VersionedModel):
             self.init_transcript(usr.uid)
             logger.trace(f"Transcript initialized: {self._tid}")
             logger.trace(f"Activity started: {self._aid}")
-        
+
     @staticmethod
+    @traced
     def load(uid: str, tid: str) -> 'BaseActivity':
         """Load an existing activity from the user id and transcript id."""
         with logger.contextualize(tid=tid, uid=uid):
             logger.trace("Loading activity...")
+            logger.trace("Loading transcript...")
             activity_collection = client.collection("activities")
             usr_ref = client.collection("users").document(uid)
             transcript_doc_ref = usr_ref.collection("transcripts").document(tid)
             transcript_doc = transcript_doc_ref.get()
-            logger.debug(transcript_doc.to_dict())
             if not transcript_doc.exists:
                 raise ValueError(f"Transcript does not exist: {tid}")
+            logger.debug(f"Got transcript: {transcript_doc.to_dict()}")
             activity_doc_ref = activity_collection.document(transcript_doc.get("activity_id"))
             activity_doc = activity_doc_ref.get()
             if not activity_doc.exists:
@@ -162,16 +166,24 @@ class BaseActivity(ABC, VersionedModel):
             )
             activity._aid = activity_doc.id
             activity._tid = tid
+            activity._uid = uid
             assert transcript_doc.get("activity_id") == activity_doc.id, "Transcript and activity do not match."
             activity._transcript = transcript.Transcript(
                 transcript_id=transcript_doc.id,
                 user_id=uid,
                 **transcript_doc.to_dict()
             )
+            logger.trace("Transcript loaded.")
+            logger.debug(f"Transcript: {activity._transcript}")
+            activity._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
+            logger.debug(f"Prompt: {activity._prompt}")
+            logger.trace("Loading character...")
+            activity._character = character.Character.from_language(transcript_doc.get("language"))
+            logger.trace("Character loaded.")
             logger.trace("Activity loaded.")
-        activity._uid = uid
         return activity
 
+    @traced
     def respond(self, usr_audio_storage_name: str) -> str:
         """Main loop iter. From the user's audio, transcribe it, get the character's response, and synthesize it to audio.
         Returns:
@@ -181,12 +193,27 @@ class BaseActivity(ABC, VersionedModel):
         if not self._aid or not self._tid:
             raise NotCreatedError("Activity not created.")
         usr_txt = speech.transcribe(usr_audio_storage_name, self.language)
+        assert isinstance(usr_txt, str)
         usr_msg = Message(role=Role.USR, content=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(usr_msg)
-        ast_txt = self._character.complete(self._transcript)
-        ast_audio_storage_name = speech.synthesize(ast_txt, self.voice, to="storage")
+        messages = self._prompt + self._transcript.messages
+        logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
+        ast_txt = self._character.complete(messages)
+        assert len(ast_txt) == 1, "Character response should be a single message."
+        ast_txt = ast_txt[0]
+        assert isinstance(ast_txt, str), "Character response should be a string."
+        ast_audio_bytes = speech.synthesize(ast_txt, self.voice, to="bytes")
+        ast_audio_storage_name = audio.make_ast_audio_name(usr_audio_storage_name)
+        _, ast_audio_file = tempfile.mkstemp(suffix=".wav", dir='/tmp')
+        try:
+            with open(ast_audio_file, "wb") as f:
+                f.write(ast_audio_bytes)
+            audio.upload(ast_audio_file, ast_audio_storage_name)
+        finally:
+            logger.trace(f"Removing temporary file: {ast_audio_file}")
+            os.remove(ast_audio_file)
         ast_msg = Message(role=Role.AST, content=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
-        self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order
+        self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order (for async)
         logger.trace(f"Responded to: {usr_audio_storage_name}")
         return ast_audio_storage_name
 

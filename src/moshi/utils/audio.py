@@ -14,7 +14,8 @@ from google.cloud import storage
 from loguru import logger
 import numpy as np
 
-from . import wavfile
+from moshi.utils import wavfile
+from moshi.utils.log import traced
 
 AUDIO_BUCKET = os.getenv("AUDIO_BUCKET", "moshi-3.appspot.com")  # NOTE default is emulator bucket
 logger.info(f"AUDIO_BUCKET={AUDIO_BUCKET}")
@@ -88,13 +89,13 @@ def af2wav(af: av.AudioFrame) -> io.BytesIO:
     wav = wavfile.write(af)
     return wav
 
+@traced
 def download(audio_path: str) -> str:
     """Download an audio file from storage to a local temporary file.
     Caller is responsible for deleting the temporary file.
     Returns:
         tfn: the path to the temporary file.
     """
-    logger.trace("Downloading audio file...")
     logger.debug(f"audio_path={audio_path}")
     with logger.contextualize(audio_bucket=AUDIO_BUCKET, audio_path=audio_path):
         logger.trace("Creating objects...")
@@ -104,7 +105,43 @@ def download(audio_path: str) -> str:
         blob = bucket.blob(audio_path)
         logger.trace("Downloading bytes...")
         blob.download_to_filename(tfn)
-        logger.trace("Downloaded audio file.")
     return tfn
+
+@traced
+def upload(file_path: Path, storage_path: Path, bucket_name: str=AUDIO_BUCKET):
+    """Upload a file to storage.
+    Args:
+        file_path: the path to the file to upload.
+        storage_path: the path to the file in storage.
+        bucket: the storage bucket to upload to.
+    """
+    with logger.contextualize(file_path=file_path, storage_path=storage_path, bucket=bucket_name):
+        logger.trace("Creating objects...")
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(str(storage_path))
+        logger.trace("Uploading bytes...")
+        blob.upload_from_filename(str(file_path))
+
+def make_ast_audio_name(usr_audio_storage_name: str) -> str:
+    """From the user's audio storage name, make the name for the character's audio.
+    The user's audio storage name MUST be of the form:
+        /audio/<uid>/<tid>/<idx>-USR.<ext>
+    Args:
+        usr_audio_storage_name: The storage name of the user's audio.
+    Returns:
+        The storage name of the character's audio. 
+    """
+    logger.debug(f"Making ast audio name from: {usr_audio_storage_name}")
+    assert "USR" in usr_audio_storage_name, "User audio storage name must contain 'USR'."
+    assert Path(usr_audio_storage_name).suffix.startswith('.'), "User audio storage name must have a file extension."
+    result = Path(usr_audio_storage_name.replace("USR", "AST"))
+    ui = result.stem.split("-")[0]
+    ai = str(int(ui) + 1)
+    logger.debug(f"User index: {ui}, ast index: {ai}")
+    new_stem = result.stem.replace(ui, ai)
+    ast_audio_storage_name = str(result.with_stem(new_stem).with_suffix(".wav"))
+    logger.debug(f"Made ast audio name: {ast_audio_storage_name}")
+    return ast_audio_storage_name
+
 
 logger.success("Audio module loaded.")

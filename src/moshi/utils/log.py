@@ -1,5 +1,7 @@
+import functools
 import os
 import sys
+import time
 
 # from google.cloud import logging  # NOTE building for functions so cloud logging via stdout
 from loguru import logger
@@ -15,6 +17,18 @@ CLOUD_LOGS = int(os.getenv("MLOGCLOUD", 0))
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} FILE_LOGS={FILE_LOGS} STDOUT_LOGS={STDOUT_LOGS} CLOUD_LOGS={CLOUD_LOGS}")
 if ENV == "dev":
     logger.warning("Running in dev mode. Logs will be verbose and include sensitive diagnostic data.")
+
+def traced(f, msg: str = None, verbose = False):
+    msg = msg or f.__name__
+    @functools.wraps(f)
+    def wrapper(*a, **k):
+        with logger.contextualize(**k if verbose else {}):
+            t0 = time.monotonic()
+            logger.opt(depth=1).trace(f"[START] {msg}")
+            result = f(*a, **k)
+            logger.opt(depth=1).trace(f"[END] {msg} ({time.monotonic() - t0:.3f}s)")
+        return result
+    return wrapper
 
 def _gcp_log_severity_map(level: str) -> str:
     """Convert loguru custom levels to GCP allowed severity level.
