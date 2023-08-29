@@ -13,7 +13,7 @@ from loguru import logger
 import openai
 
 from . import audio
-from moshi.utils import secrets
+from moshi.utils import secrets, lang
 from moshi.utils.log import traced
 
 GOOGLE_SPEECH_SYNTHESIS_TIMEOUT = int(os.getenv("GOOGLE_SPEECH_SYNTHESIS_TIMEOUT", 5))
@@ -152,14 +152,12 @@ def _transcribe_audio_frame(audio_frame: av.AudioFrame, language: str = None) ->
 
 def _parse_to_iso639_1(language: str) -> str:
     iso = language.split("-")[0] if '-' in language else language
-    lan = iso639.Language.match(iso)
-    if lan is None:
-        raise ValueError(f"Could not parse language: {language}")
+    lan = lang.match(iso)
     return lan.part1
 
 @traced
 def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
-    """Transcribe audio to text. OpenAI requires ISO-639-1 ('en', 'es', 'fr', etc.).
+    """Transcribe audio to text using Google Cloud Speech-to-Text.
     Args:
         - audio: either an AudioFrame or a storage id.
         - language: if provided, transcribe to that language; else, autodetect

@@ -28,6 +28,7 @@ def match(language: str) -> str:
     # There is spotty language coverage across libraries, so we use both
     try:
         lan = iso639.Language.match(language)
+        logger.debug(f"Matched {language} to {lan} using iso639.")
         lan = lan.part1
     except iso639.language.LanguageNotFoundError:
         lan = isocodes.languages.get(name=language)['alpha_2']
@@ -37,7 +38,8 @@ def match(language: str) -> str:
             lan = isocodes.languages.get(alpha_2=language)['alpha_2']
         if not lan:
             raise ValueError(f"Could not find language for {l}")
-    assert len(lan) == 2, f"Invalid language code: {lan}"
+        logger.debug(f"Matched {language} to {lan} using isocodes.")
+    assert len(lan) in {2, 3}, f"Invalid language code: {lan}"
     return lan
 
 @traced
