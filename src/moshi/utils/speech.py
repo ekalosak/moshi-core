@@ -32,9 +32,18 @@ def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
         return False
 
 
-def list_voices() -> list[tts.Voice]:
-    """List all voices supported by the API."""
-    response = client.list_voices(timeout=GOOGLE_VOICE_SELECTION_TIMEOUT)
+@traced
+def list_voices(lan: str=None) -> list[tts.Voice]:
+    """List all voices supported by the API.
+    Args:
+        - lan: if provided, filter by language code. It must be a BCP 47 language code e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
+    """
+    if lan:
+        logger.debug(f"Listing voices for language: {lan}")
+        response = client.list_voices(language_code=lan, timeout=GOOGLE_VOICE_SELECTION_TIMEOUT)
+    else:
+        logger.debug("Listing all voices.")
+        response = client.list_voices(timeout=GOOGLE_VOICE_SELECTION_TIMEOUT)
     return response.voices
 
 def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
@@ -46,14 +55,12 @@ def get_voice(langcode: str, gender="FEMALE", model="Standard") -> str:
     Source:
         - https://cloud.google.com/text-to-speech/pricing for list of valid voice model classes
     """
-    logger.trace(f"Getting voice for lang code: {langcode}")
-    response = client.list_voices(language_code=langcode, timeout=GOOGLE_VOICE_SELECTION_TIMEOUT)
-    voices = response.voices
-    logger.trace(f"Language {langcode} has {len(voices)} supported voices.")
+    logger.debug(f"Getting voice for lang code: {langcode}")
+    voices = list_voices(langcode)
+    logger.debug(f"Language {langcode} has {len(voices)} supported voices.")
     for voice in voices:
-        logger.trace(f"Checking voice: {voice}")
         if model in voice.name and gender_match(gender, voice.ssml_gender):
-            logger.trace("Found match")
+            logger.debug("Found match")
             return voice
     raise ValueError(
         f"Voice not found for langcode={langcode}, gender={gender}, model={model}"
