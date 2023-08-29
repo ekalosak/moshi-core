@@ -6,6 +6,8 @@
 from difflib import SequenceMatcher
 import textwrap
 
+import iso639
+import isocodes
 from google.cloud import translate_v2 as translate
 from loguru import logger
 
@@ -20,6 +22,23 @@ def similar(a, b) -> float:
         - https://stackoverflow.com/a/17388505/5298555
     """
     return SequenceMatcher(None, a, b).ratio()
+
+def match(language: str) -> str:
+    """Get the closest matching language code ISO-639-1."""
+    # There is spotty language coverage across libraries, so we use both
+    try:
+        lan = iso639.Language.match(language)
+        lan = lan.part1
+    except iso639.language.LanguageNotFoundError:
+        lan = isocodes.languages.get(name=language)['alpha_2']
+        if not lan:
+            lan = isocodes.languages.get(alpha_3=language)['alpha_2']
+        if not lan:
+            lan = isocodes.languages.get(alpha_2=language)['alpha_2']
+        if not lan:
+            raise ValueError(f"Could not find language for {l}")
+    assert len(lan) == 2, f"Invalid language code: {lan}"
+    return lan
 
 @traced
 def translate_messages(messages: list[Message], target: str) -> list[Message]:
