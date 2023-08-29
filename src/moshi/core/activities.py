@@ -66,52 +66,36 @@ class BaseActivity(ABC, VersionedModel):
         return self._aid
 
     @traced
-    def create_doc(self) -> firestore.DocumentReference:
+    def create_doc(self):
         """Create a new activity document in Firestore. Usually, this is done when the activity is started and the prompt for the desired language hasn't been initialized yet. If the activity type has already been initialized for the desired language, this will create a new one with a more recent `created_at` tag."""
         activity_payload = self.model_dump()
         if self.language.startswith("en"):
             prompt = self._get_base_prompt()
         else:
-            # prompt = self.translate_prompt()
             prompt = lang.translate_messages(self._get_base_prompt(), self.language)
+        self._prompt = prompt
         prompt = [transcript.message_to_payload(msg) for msg in prompt]
         activity_payload["prompt"] = prompt
         activity_collection = client.collection("activities")
         activity_doc = activity_collection.document()
+        self._aid = activity_doc.id
         activity_doc.set(activity_payload)
-        return activity_doc
+        logger.success(f"Created new activity doc: {activity_doc.id}")
 
     @traced
     def init_activity(self):
         """Get the document for this activity in the desired language. If it doesn't exist, create it."""
-        logger.trace("Getting activity doc...")
-        activity_collection = client.collection("activities")
-        # get the latest activity doc matching the activity type and language
-        # query = activity_collection.where("type", "==", self.type).where("language", "==", self.language).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
-        query = activity_collection.where(filter=FieldFilter("type", "==", self.type.value)).where(filter=FieldFilter("language", "==", self.language)).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
-        activity_docs = query.get()
-        if activity_docs:
-            assert len(activity_docs) == 1, "More than one activity doc found."
-            activity_doc = activity_docs[0]
-        else:
-            logger.info("Creating new activity doc...")
-            activity_doc = self.create_doc()
-            logger.success("Created new activity doc.")
-        self._aid = activity_doc.id
-        self._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
-        logger.trace("Got activity doc.")
-
-    # def translate_prompt(self) -> list[Message]:
-    #     """Translate the prompt into the user's target language.
-    #     NOTE: this does not get the base prompt from Firebase, it gets it from the static configuration provided by the concrete BaseActivity class.
-    #     """
-    #     with logger.contextualize(activity_type=self.type.value, language=self.language):
-    #         logger.trace("Translating prompt...")
-    #         prompt = lang.translate_messages(self._get_base_prompt(), self.language)
-    #         pretty_prompt = pformat([msg.content for msg in prompt])
-    #         logger.info(f"Translated prompt: {pretty_prompt}")
-    #         logger.trace(f"Translated prompt.")
-    #     return prompt
+        with logger.contextualize(activity_type=self.type.value, language=self.language):
+            activity_collection = client.collection("activities")
+            query = activity_collection.where(filter=FieldFilter("type", "==", self.type.value)).where(filter=FieldFilter("language", "==", self.language)).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
+            activity_docs = query.get()
+            if activity_docs:
+                assert len(activity_docs) == 1, "More than one activity doc found."
+                activity_doc = activity_docs[0]
+                self._aid = activity_doc.id
+                self._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
+            else:
+                activity_doc = self.create_doc()
 
     @traced
     def init_transcript(self, uid: str):
@@ -126,6 +110,7 @@ class BaseActivity(ABC, VersionedModel):
         transcript_doc_ref = usr_doc_ref.collection("transcripts").document()
         transcript_doc_ref.set(transcript.skeleton(self._aid, self.language))
         self._tid = transcript_doc_ref.id
+        logger.info(f"Initialized transcript: {self._tid}")
 
     @traced
     def start(self, usr: user.User):
@@ -133,20 +118,15 @@ class BaseActivity(ABC, VersionedModel):
         The tid and aid are initialized in this function, in place.
         """
         with logger.contextualize(activity_type=self.type.value):
-            logger.trace("Starting activity...")
             self.init_activity()
-            logger.trace(f"Initializing transcript...")
             self.init_transcript(usr.uid)
-            logger.trace(f"Transcript initialized: {self._tid}")
-            logger.trace(f"Activity started: {self._aid}")
+            logger.info(f"Activity started: {self._aid}")
 
     @staticmethod
     @traced
     def load(uid: str, tid: str) -> 'BaseActivity':
         """Load an existing activity from the user id and transcript id."""
         with logger.contextualize(tid=tid, uid=uid):
-            logger.trace("Loading activity...")
-            logger.trace("Loading transcript...")
             activity_collection = client.collection("activities")
             usr_ref = client.collection("users").document(uid)
             transcript_doc_ref = usr_ref.collection("transcripts").document(tid)
@@ -173,14 +153,11 @@ class BaseActivity(ABC, VersionedModel):
                 user_id=uid,
                 **transcript_doc.to_dict()
             )
-            logger.trace("Transcript loaded.")
             logger.debug(f"Transcript: {activity._transcript}")
             activity._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
             logger.debug(f"Prompt: {activity._prompt}")
-            logger.trace("Loading character...")
             activity._character = character.Character.from_language(transcript_doc.get("language"))
-            logger.trace("Character loaded.")
-            logger.trace("Activity loaded.")
+        logger.info(f"Loaded activity: {activity._aid}")
         return activity
 
     @traced

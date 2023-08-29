@@ -1,5 +1,4 @@
 """This module provides speech synthesis and transcription utilities.
-The main entrypoint is `synthesize` which takes a string and returns an AudioFrame.
 """
 import io
 import os
@@ -7,20 +6,19 @@ from pathlib import Path
 from textwrap import shorten
 
 import av
+from google.cloud import speech as stt
 from google.cloud import texttospeech as tts
-import iso639
 from loguru import logger
-import openai
 
 from . import audio
-from moshi.utils import secrets, lang
+from moshi.utils import lang
 from moshi.utils.log import traced
 
 GOOGLE_SPEECH_SYNTHESIS_TIMEOUT = int(os.getenv("GOOGLE_SPEECH_SYNTHESIS_TIMEOUT", 5))
 GOOGLE_VOICE_SELECTION_TIMEOUT = int(os.getenv("GOOGLE_VOICE_SELECTION_TIMEOUT", 5))
-OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
-logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT} OPENAI_TRANSCRIPTION_MODEL={OPENAI_TRANSCRIPTION_MODEL}")
+logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} GOOGLE_VOICE_SELECTION_TIMEOUT={GOOGLE_VOICE_SELECTION_TIMEOUT}")
 
+sclient = stt.SpeechClient()
 client = tts.TextToSpeechClient()
 
 def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
@@ -110,7 +108,6 @@ def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame")
         - ValueError if to is invalid.
     """
     with logger.contextualize(text=text, voice=voice, rate=rate, to=to):
-        logger.trace("[START] Synthesizing speech.")
         if to == "audio_frame":
             result = _synthesize_af(text, voice, rate)
         elif to == "bytes":
@@ -119,72 +116,27 @@ def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame")
             raise ValueError(f"Invalid value for 'to': {to}")
         logger.trace(f"synthesized speech: {type(result)}")
         assert isinstance(result, (av.AudioFrame, bytes, str))
-        logger.trace("[END] Synthesizing speech.")
     return result
-
-def _transcribe_audio_buffer(buf: io.BytesIO, language: str = None) -> str:
-    logger.debug("Transcription has no timeout.")
-    buf.name = 'dummy'
-    transcript = openai.Audio.transcribe(
-        OPENAI_TRANSCRIPTION_MODEL, buf, language=language
-    )
-    logger.debug(f"Transcript: {transcript}")
-    return transcript["text"]
-
-def _transcribe_audio_file(fp: Path | str, language: str = None) -> str:
-    logger.trace(f"[START] Transcribing: {fp}")
-    logger.debug("Transcription has no timeout.")
-    with open(fp, "rb") as f:
-        transcript = openai.Audio.transcribe(
-            OPENAI_TRANSCRIPTION_MODEL, f, language=language
-        )
-    text = transcript['text']
-    transcript.pop('text')
-    with logger.contextualize(transcript=transcript.to_dict()):
-        logger.log("TRANSCRIPT", shorten(text, 96))
-    logger.trace(f"[END] Transcribing: {fp}")
-    return text
-
-
-def _transcribe_audio_frame(audio_frame: av.AudioFrame, language: str = None) -> str:
-    buf = audio.af2wav(audio_frame)
-    return _transcribe_audio_buffer(buf, language)
-
-def _parse_to_iso639_1(language: str) -> str:
-    iso = language.split("-")[0] if '-' in language else language
-    lan = lang.match(iso)
-    return lan.part1
 
 @traced
-def transcribe(aud: av.AudioFrame | str, language: str = None) -> str:
+def transcribe(aud: str, bcp47: str) -> str:
     """Transcribe audio to text using Google Cloud Speech-to-Text.
     Args:
-        - audio: either an AudioFrame or a storage id.
-        - language: if provided, transcribe to that language; else, autodetect
+        - aud: audio file path or URL
+        - bcp47: BCP 47 language code e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
     """
-    logger.trace("[START] Transcribing audio.")
-    if not language:
-        logger.warning("Using language auto-detection; accuracy will be degraded.")
-    secrets.login_openai()
-    language = _parse_to_iso639_1(language)
-    if isinstance(aud, av.AudioFrame):
-        result = _transcribe_audio_frame(aud, language)
-    elif isinstance(aud, str):
-        with logger.contextualize(aud=aud):
-            logger.trace("Retrieving audio from storage...")
-            fn = audio.download(aud)
-            with logger.contextualize(fn=fn):
-                try:
-                    logger.trace("Audio retrieved from storage.")
-                    fp = Path(fn)
-                    transcription = _transcribe_audio_file(fp, language)
-                finally:
-                    logger.trace("Removing temporary file.")
-                    os.remove(fn)
-        result = transcription.strip()
-    else:
-        raise ValueError(f"Invalid type for audio: {type(aud)}")
-    logger.trace("[END] Transcribing audio.")
-    return result
+    with logger.contextualize(aud=aud, bcp47=bcp47):
+        logger.debug("Transcription has no timeout.")
+        config = stt.RecognitionConfig(language_code=bcp47)
+        audio = stt.RecognitionAudio(uri=aud)
+        print(config)
+        print(audio)
+        response = sclient.recognize(config=config, audio=audio)
+        for result in response.results:
+            print("Transcript: {}".format(result.best_alternative.transcript))
+            print("Confidence: {}".format(result.best_alternative.confidence))
+        text = response.results[0].alternatives[0].transcript
+        logger.log("TRANSCRIPT", shorten(text, 96))
+        return text
 
 logger.success("Speech module loaded.")

@@ -1,7 +1,9 @@
-# This module provides language utilities, including:
-#     - Language detection
-#     - Language translation
-#     - String similarity
+"""This module provides language utilities, including:
+    - Language detection
+    - Language translation
+    - String similarity
+"""
+# TODO use langcodes package to parse / handle language codes
 
 from difflib import SequenceMatcher
 import textwrap
