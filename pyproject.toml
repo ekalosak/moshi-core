@@ -26,6 +26,7 @@ dependencies = [
   "google-cloud-texttospeech",
   "google-cloud-secret-manager",
   "loguru",
+  "pydantic",
   "numpy",
   "openai",
 ]
