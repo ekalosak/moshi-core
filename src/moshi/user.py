@@ -1,12 +1,14 @@
 """Manage user profiles."""
 from datetime import datetime
+import os
 
 from google.cloud import firestore, exceptions
 from loguru import logger
 
-from moshi import VersionedModel, ParseError
+from moshi import VersionedModel, ParseError, GCLOUD_PROJECT
 
-client = firestore.Client()
+client = firestore.Client(project=GCLOUD_PROJECT)
+logger.info(f"Firestore client using project: {client.project}")
 
 class User(VersionedModel):
     """Models the user profile."""
