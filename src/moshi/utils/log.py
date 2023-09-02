@@ -7,14 +7,13 @@ import time
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 
-LOG_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
+LOGURU_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
 
 ENV = os.getenv("ENV", "prod")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
-FILE_LOGS = int(os.getenv("MLOGDISK", 0))
-STDOUT_LOGS = int(os.getenv("MLOGSTDOUT", 1))
-CLOUD_LOGS = int(os.getenv("MLOGCLOUD", 0))
-logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} FILE_LOGS={FILE_LOGS} STDOUT_LOGS={STDOUT_LOGS} CLOUD_LOGS={CLOUD_LOGS}")
+LOG_FORMAT = os.getenv("LOG_FORMAT", "json")
+LOG_COLORIZE = int(os.getenv("LOG_COLORIZE", 0))
+logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} LOG_FORMAT={LOG_FORMAT} LOG_COLORIZE={LOG_COLORIZE}")
 if ENV == "dev":
     logger.warning("Running in dev mode. Logs will be verbose and include sensitive diagnostic data.")
 
@@ -75,37 +74,21 @@ def _to_log_dict(rec: dict) -> dict:
 
 
 def setup_loguru():
+    logger.debug("Adding stdout logger...")
+    if LOG_FORMAT == "json":
+        logger.debug("Using JSON formatter...")
+        formatter = _to_log_dict
+    else:
+        logger.debug("Using LOGURU formatter...")
+        formatter = LOGURU_FORMAT
     logger.remove()
     logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
-    print(f"Logging configuration: LEVEL={LOG_LEVEL} STDOUT={STDOUT_LOGS}, FILE={FILE_LOGS}, CLOUD={CLOUD_LOGS}")
-    if STDOUT_LOGS:
-        print("Adding stdout logger...")
-        logger.add(
-            diagnose=ENV=="dev",
-            sink=sys.stderr,
-            level=LOG_LEVEL,
-            format=LOG_FORMAT,
-            colorize=ENV=="dev",
-        )
-    if FILE_LOGS:
-        print("Adding file logger...")
-        logger.add(
-            "logs/server.log",
-            level=LOG_LEVEL,
-            format=LOG_FORMAT,
-            rotation="10 MB",
-        )
-    # # Google logging  (https://github.com/Delgan/loguru/issues/789)
-    # if CLOUD_LOGS:
-    #     print("Creating GCP logging client...")
-    #     logging_client = logging.Client()
-    #     gcp_logger = logging_client.logger("gcp-logger")
-
-    #     async def _log_to_gcp(message):
-    #         try:
-    #             logdict = _to_log_dict(message.record)
-    #             await gcp_logger.log_struct(logdict)
-    #         except Exception as e:
-    #             print(f"Error logging to GCP: {e}")
+    logger.add(
+        diagnose=ENV=="dev",
+        sink=sys.stdout,
+        level=LOG_LEVEL,
+        format=formatter,
+        colorize=ENV=="dev" or LOG_COLORIZE,
+    )
 
 logger.success("Logging configured.")
