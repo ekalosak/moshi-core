@@ -12,13 +12,13 @@ from google.cloud.firestore_v1 import FieldFilter
 from loguru import logger
 from pydantic import Field
 
-from moshi import Message, Role, VersionedModel, user
+from moshi import Message, Role, VersionedModel, user, GCLOUD_PROJECT
 from moshi.core import character, transcript
 from moshi.utils import audio, speech, lang
 from moshi.utils.audio import AUDIO_BUCKET
 from moshi.utils.log import traced
 
-client = firestore.Client()
+client = firestore.Client(project=GCLOUD_PROJECT)
 
 class NotCreatedError(Exception):
     """Raised when an activity is not created before it is loaded."""
@@ -85,16 +85,18 @@ class BaseActivity(ABC, VersionedModel):
     @traced
     def init_activity(self):
         """Get the document for this activity in the desired language. If it doesn't exist, create it."""
-        with logger.contextualize(activity_type=self.type.value, language=self.language):
+        with logger.contextualize(language=self.language):
             activity_collection = client.collection("activities")
             query = activity_collection.where(filter=FieldFilter("type", "==", self.type.value)).where(filter=FieldFilter("language", "==", self.language)).order_by("created_at", direction=firestore.Query.DESCENDING).limit(1)
             activity_docs = query.get()
             if activity_docs:
+                logger.debug("activity found")
                 assert len(activity_docs) == 1, "More than one activity doc found."
                 activity_doc = activity_docs[0]
                 self._aid = activity_doc.id
                 self._prompt = [Message(**msg) for msg in activity_doc.get("prompt")]
             else:
+                logger.debug("activity not found")
                 activity_doc = self.create_doc()
 
     @traced
