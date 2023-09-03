@@ -171,7 +171,8 @@ class BaseActivity(ABC, VersionedModel):
         logger.trace(f"Responding to: {usr_audio_storage_name}")
         if not self._aid or not self._tid:
             raise NotCreatedError("Activity not created.")
-        usr_txt = speech.transcribe(usr_audio_storage_name, self.language)
+        usr_audio_gsid = f"gs://{AUDIO_BUCKET}/{usr_audio_storage_name}"
+        usr_txt = speech.transcribe(usr_audio_gsid, self.language)
         assert isinstance(usr_txt, str)
         usr_msg = Message(role=Role.USR, content=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(usr_msg)

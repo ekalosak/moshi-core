@@ -1,6 +1,5 @@
 """This module provides speech synthesis and transcription utilities.
 """
-import io
 import os
 from pathlib import Path
 from textwrap import shorten
@@ -10,8 +9,8 @@ from google.cloud import speech as stt
 from google.cloud import texttospeech as tts
 from loguru import logger
 
-from . import audio
-from moshi.utils import lang
+from moshi import GCLOUD_PROJECT
+from moshi.utils import audio
 from moshi.utils.log import traced
 
 GOOGLE_SPEECH_SYNTHESIS_TIMEOUT = int(os.getenv("GOOGLE_SPEECH_SYNTHESIS_TIMEOUT", 5))
@@ -122,21 +121,23 @@ def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame")
 def transcribe(aud: str, bcp47: str) -> str:
     """Transcribe audio to text using Google Cloud Speech-to-Text.
     Args:
-        - aud: audio file path or URL
+        - aud: audio file path or URL  e.g. "gs://moshi-audio/activities/1/1/1.wav"
         - bcp47: BCP 47 language code e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
+    Notes:
+        - https://cloud.google.com/speech-to-text/docs/error-messages
+            - "Invalid recognition 'config': bad encoding"
     """
     with logger.contextualize(aud=aud, bcp47=bcp47):
         logger.debug("Transcription has no timeout.")
         config = stt.RecognitionConfig(language_code=bcp47)
         audio = stt.RecognitionAudio(uri=aud)
-        print(config)
-        print(audio)
+        logger.debug(f"RecognitionConfig: {config}")
+        logger.debug(f"RecognitionAudio: {audio}")
         response = sclient.recognize(config=config, audio=audio)
-        for result in response.results:
-            print("Transcript: {}".format(result.best_alternative.transcript))
-            print("Confidence: {}".format(result.best_alternative.confidence))
         text = response.results[0].alternatives[0].transcript
-        logger.log("TRANSCRIPT", shorten(text, 96))
+        conf = response.results[0].alternatives[0].confidence
+        with logger.contextualize(confidence=conf):
+            logger.log("TRANSCRIPT", shorten(text, 96))
         return text
 
 logger.success("Speech module loaded.")

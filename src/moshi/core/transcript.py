@@ -3,9 +3,10 @@ from datetime import datetime
 from google.cloud import firestore
 from loguru import logger
 
-from moshi import Message, VersionedModel, __version__ as moshi_version
+from moshi import Message, VersionedModel, __version__ as moshi_version, GCLOUD_PROJECT
+from moshi.utils.log import traced
 
-client = firestore.Client()
+client = firestore.Client(project=GCLOUD_PROJECT)
 
 def skeleton(activity_id: str, language: str) -> dict:
     transcript_payload = {
@@ -51,26 +52,28 @@ class Transcript(VersionedModel):
     def uid(self):
         return self.user_id
 
+    @traced
     def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
-            logger.trace("Adding message to transcript...")
             self.messages.append(msg)
             self.append_to_doc(msg)
-            logger.trace("Message added to transcript.")
 
+    @traced
     def append_to_doc(self, msg: Message):
         """Save the transcript to Firestore."""
         transcript_col = client.collection("users").document(self.uid).collection("transcripts")
         if self.tid:
-            logger.trace("Updating existing doc...")
+            logger.debug("Updating existing doc.")
             doc_ref = transcript_col.document(self.tid)
         else:
-            logger.info("Creating new conversation document...")
+            logger.info("Creating new conversation document.")
             doc_ref = transcript_col.document()
             self.transcript_id = doc_ref.id
         with logger.contextualize(tid=self.tid, aid=self.aid):
-            logger.trace(f"Saving conversation document...")
+            logger.trace(f"[START] Saving conversation document.")
             payload = message_to_payload(msg)
+            logger.debug(f"Payload: {payload}")
             doc_ref.update({"messages": firestore.ArrayUnion([payload])})
-            logger.trace(f"Saved conversation document.")
+            # doc_ref.set({"messages": firestore.ArrayUnion([payload])})
+            logger.trace(f"[END] Saving conversation document.")
