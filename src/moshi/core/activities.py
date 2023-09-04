@@ -25,15 +25,17 @@ class NotCreatedError(Exception):
     pass
 
 class ActivityType(str, Enum):
-    UNSTRUCTURED = "unstructured"  # talk about anything, user-driven.
+    UNSTRUCTURED = "unstructured"  # talk about anything, user-driven, random topic.
     TOPICAL = "topical"  # talk about a specific topic e.g. sports, politics, etc.
     SCENARIO = "scenario"  # play out a scenario e.g. a job interview, ordering coffee, etc.
+    LESSON = "lesson"  # e.g. (beginner, introductions), (intermediate, small talk), (advanced, debate)
 
 class BaseActivity(ABC, VersionedModel):
     """An Activity provides a prompt for a conversation and the database wrapper."""
 
     type: ActivityType
     language: str
+    native_language: str
     _aid: str = None
     _tid: str = None
     _uid: str = None
@@ -110,7 +112,7 @@ class BaseActivity(ABC, VersionedModel):
         if not usr_doc.exists:
             raise ValueError(f"User does not exist: {uid}")
         transcript_doc_ref = usr_doc_ref.collection("transcripts").document()
-        transcript_doc_ref.set(transcript.skeleton(self._aid, self.language))
+        transcript_doc_ref.set(transcript.skeleton(self._aid, self.language, self.native_language))
         self._tid = transcript_doc_ref.id
         logger.info(f"Initialized transcript: {self._tid}")
 
@@ -143,6 +145,7 @@ class BaseActivity(ABC, VersionedModel):
             activity = Activity(
                 type=activity_doc.get("type"),
                 language=activity_doc.get("language"),
+                native_language=activity_doc.get("native_language"),
                 created_at=activity_doc.get("created_at"),
                 moshi_version=activity_doc.get("moshi_version"),
             )
@@ -174,7 +177,7 @@ class BaseActivity(ABC, VersionedModel):
         usr_audio_gsid = f"gs://{AUDIO_BUCKET}/{usr_audio_storage_name}"
         usr_txt = speech.transcribe(usr_audio_gsid, self.language)
         assert isinstance(usr_txt, str)
-        usr_msg = Message(role=Role.USR, content=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
+        usr_msg = Message(role=Role.USR, body=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(usr_msg)
         messages = self._prompt + self._transcript.messages
         logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
@@ -192,7 +195,7 @@ class BaseActivity(ABC, VersionedModel):
         finally:
             logger.trace(f"Removing temporary file: {ast_audio_file}")
             os.remove(ast_audio_file)
-        ast_msg = Message(role=Role.AST, content=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
+        ast_msg = Message(role=Role.AST, body=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
         self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order (for async)
         logger.trace(f"Responded to: {usr_audio_storage_name}")
         return ast_audio_storage_name
@@ -204,7 +207,7 @@ class Unstructured(BaseActivity):
         messages = [
             Message(
                 role=Role.SYS,
-                content="If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
+                body="If the conversation becomes laborious, try introducing or asking a question about various topics such as the weather, history, sports, etc.",
             )
         ]
         return messages

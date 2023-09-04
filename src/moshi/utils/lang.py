@@ -50,9 +50,9 @@ def translate_messages(messages: list[Message], target: str) -> list[Message]:
     with logger.contextualize(tmtarget=target):
         logger.trace(f"Translating {len(messages)} messages...")
         for i, message in enumerate(messages):
-            logger.trace(f"Translating: {message}")
-            messages[i].content = translate_text(message.content, target=target)
-            logger.trace(f"Translated to: {messages[i]}")
+            logger.debug(f"Translating: {message}")
+            messages[i].body = translate_text(message.body, target=target)
+            logger.debug(f"Translated to: {messages[i]}")
         logger.trace(f"Translated {len(messages)} messages.")
     return messages
 

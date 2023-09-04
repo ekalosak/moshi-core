@@ -57,7 +57,7 @@ def _chat_completion_payload_from_messages(
     """
     payload = []
     for msg in messages:
-        msg_ = {"role": msg.role.value, "content": msg.content}
+        msg_ = {"role": msg.role.value, "content": msg.body}
         payload.append(msg_)
     logger.debug(f"payload:\n{pformat(payload)}")
     return payload
@@ -76,11 +76,11 @@ def _completion_payload_from_messages(messages: list[Message]) -> CompletionPayl
                 logger.warning(
                     f"System message out of place:\n{msg}\n{[msg.role for msg in messages]}"
                 )
-            msgstr = f"{msg.content}"
+            msgstr = f"{msg.body}"
         else:
             sys_done = True
             role = "1" if msg.role == Role.USR else "2"
-            msgstr = f"{role}: {msg.content}"
+            msgstr = f"{role}: {msg.body}"
         payload.append(msgstr)
     payload = "\n".join(payload) + "\n2:"
     logger.debug(f"payload:\n{pformat(payload)}")
@@ -104,7 +104,7 @@ def _chat_completion(
             logger.warning(f"Got finish_reason: {reason}")
         if n > 1:
             logger.warning(f"n={n}, using only first completion")
-        msg_contents.append(choice.message.content)
+        msg_contents.append(choice.message.content)  # choice is from the API
         break
     return msg_contents
 

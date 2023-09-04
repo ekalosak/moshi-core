@@ -8,10 +8,12 @@ from moshi.utils.log import traced
 
 client = firestore.Client(project=GCLOUD_PROJECT)
 
-def skeleton(activity_id: str, language: str) -> dict:
+def skeleton(activity_id: str, language: str, native_language: str) -> dict:
+    """Create a new transcript payload, languages are BCP-47 codes."""
     transcript_payload = {
         'activity_id': activity_id,
-        'language': language,  # NOTE redundant by activity
+        'language': language,  # NOTE redundant by activity but useful for querying upon finalization etc.
+        'native_language': native_language,
         'messages': [],
         'created_at': datetime.now(),
         'moshi_version': moshi_version,

@@ -27,7 +27,7 @@ class Translation(BaseModel):
 
 class Message(VersionedModel):
     role: Role
-    content: str
+    body: str
     audio: AudioStorage | None = None
     translation: Translation | None = None
 
