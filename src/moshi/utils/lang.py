@@ -39,7 +39,7 @@ def match(language: str) -> str:
         if not lan:
             lan = isocodes.languages.get(alpha_2=language)['alpha_2']
         if not lan:
-            raise ValueError(f"Could not find language for {l}")
+            raise ValueError(f"Could not find language for {language}")
         logger.debug(f"Matched {language} to {lan} using isocodes.")
     assert len(lan) in {2, 3}, f"Invalid language code: {lan}"
     return lan

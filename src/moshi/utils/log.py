@@ -11,7 +11,7 @@ LOGURU_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
 
 ENV = os.getenv("ENV", "prod")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
-LOG_FORMAT = os.getenv("LOG_FORMAT", "json")
+LOG_FORMAT = os.getenv("LOG_FORMAT", "rich")  # either json or anything else
 LOG_COLORIZE = int(os.getenv("LOG_COLORIZE", 0))
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} LOG_FORMAT={LOG_FORMAT} LOG_COLORIZE={LOG_COLORIZE}")
 if ENV == "dev":
@@ -57,10 +57,11 @@ def _to_log_dict(rec: dict) -> dict:
     if not rec["extra"]:
         rec.pop("extra")
     rec["elapsed"] = _format_timedelta(rec["elapsed"])
-    if rec["exception"] is not None:
-        rec["exception"] = str(rec["exception"])
-    else:
-        rec.pop("exception")
+    if "exception" in rec:
+        if rec["exception"] is not None:
+            rec["exception"] = str(rec["exception"])
+        else:
+            rec.pop("exception")
     rec["file"] = rec["file"].name  # also .path
     rec["process_id"] = rec["process"].id
     rec["process_name"] = rec["process"].name
