@@ -58,6 +58,13 @@ def translate_messages(messages: list[Message], target: str) -> list[Message]:
 
 @traced
 def translate_text(text: str, target: str) -> str:
+    """Translate text to target language. Timeout handled by caller.
+    Args:
+        text: The text to translate.
+        target: The target language bcp47 code.
+    Returns:
+        The translated text.
+    """
     if '-' in target:
         target = target.split('-')[0]
     assert len(target) in {2, 3}, f"Invalid target language: {target}"

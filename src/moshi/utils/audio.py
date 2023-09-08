@@ -90,9 +90,10 @@ def af2wav(af: av.AudioFrame) -> io.BytesIO:
     return wav
 
 @traced
-def download(audio_path: str) -> str:
+def download(audio_path: str, tmp: str=None) -> str:
     """Download an audio file from storage to a local temporary file.
     Caller is responsible for deleting the temporary file.
+    Optional tmp path.
     Returns:
         tfn: the path to the temporary file.
     """
@@ -100,12 +101,13 @@ def download(audio_path: str) -> str:
     with logger.contextualize(audio_bucket=AUDIO_BUCKET, audio_path=audio_path):
         logger.trace("Creating objects...")
         afl = Path(audio_path)
-        _, tfn = tempfile.mkstemp(suffix=afl.suffix, prefix=afl.stem, dir='/tmp')
+        if tmp is None:
+            _, tmp = tempfile.mkstemp(suffix=afl.suffix, prefix=afl.stem, dir='/tmp')
         bucket = storage_client.bucket(AUDIO_BUCKET)
         blob = bucket.blob(audio_path)
         logger.trace("Downloading bytes...")
-        blob.download_to_filename(tfn)
-    return tfn
+        blob.download_to_filename(tmp)
+    return tmp
 
 @traced
 def upload(file_path: Path, storage_path: Path, bucket_name: str=AUDIO_BUCKET):

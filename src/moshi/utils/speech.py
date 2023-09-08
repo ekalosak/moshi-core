@@ -118,10 +118,10 @@ def synthesize(text: str, voice: tts.Voice, rate: int = 24000, to="audio_frame")
     return result
 
 @traced
-def transcribe(aud: str, bcp47: str) -> str:
+def transcribe(aud: str | bytes, bcp47: str) -> str:
     """Transcribe audio to text using Google Cloud Speech-to-Text.
     Args:
-        - aud: audio file path or URL  e.g. "gs://moshi-audio/activities/1/1/1.wav"
+        - aud: audio GCP Storage path  e.g. "gs://moshi-audio/activities/1/1/1.wav"
         - bcp47: BCP 47 language code e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
     Notes:
         - https://cloud.google.com/speech-to-text/docs/error-messages
@@ -130,7 +130,12 @@ def transcribe(aud: str, bcp47: str) -> str:
     with logger.contextualize(aud=aud, bcp47=bcp47):
         logger.debug("Transcription has no timeout.")
         config = stt.RecognitionConfig(language_code=bcp47)
-        audio = stt.RecognitionAudio(uri=aud)
+        if isinstance(aud, str):
+            audio = stt.RecognitionAudio(uri=aud)
+        elif isinstance(aud, bytes):
+            audio = stt.RecognitionAudio(content=aud)
+        else:
+            raise TypeError(f"Invalid type for 'aud': {type(aud)}")
         logger.debug(f"RecognitionConfig: {config}")
         logger.debug(f"RecognitionAudio: {audio}")
         response = sclient.recognize(config=config, audio=audio)

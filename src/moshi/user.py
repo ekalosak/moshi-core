@@ -17,6 +17,14 @@ class User(VersionedModel):
     language: str
     native_language: str
 
+    @property
+    def doc(self) -> firestore.DocumentReference:
+        """Get the Firestore document reference for this user."""
+        doc = client.collection("users").document(self.uid).get()
+        if not doc.exists:
+            raise ValueError(f"User does not exist: {self.uid}")
+        return doc
+
 def create_doc(usr: User):
     """Create a new user in Firestore."""
     logger.trace(f"Creating user...")
