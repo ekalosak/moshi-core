@@ -153,6 +153,11 @@ def from_assistant(
         assert n > 0 and isinstance(n, int)
         if n > 1:
             logger.warning(f"Generating many responses at once can be costly: n={n}")
+        if 'max_tokens' not in kwargs:
+            logger.warning(f"max_tokens not specified, using default: 150")
+            kwargs['max_tokens'] = 150
+        if kwargs['max_tokens'] > 150:
+            logger.warning(f"max_tokens > 150, this may be costly and may cause partial audio to be generated: {kwargs['max_tokens']}")
         secrets.login_openai()
         msg_contents = []
         if user:
