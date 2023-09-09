@@ -137,7 +137,7 @@ class BaseActivity(ABC, VersionedModel):
         with logger.contextualize(transcript_id=transcript_id):
             logger.debug(f"Getting transcript doc for user: {self.user.uid}")
             doc = db.collection("users").document(self.user.uid).collection("transcripts").document(transcript_id).get()
-            self._transcript = transcript.Transcript(**doc.to_dict())
+            self._transcript = transcript.Transcript(**doc.to_dict(), transcript_id=doc.id, user_id=self.user.uid)
             self._activity_id = self._transcript.aid
             logger.debug(f"Loaded transcript: {shorten(str(self._transcript), 96)}")
 
@@ -219,6 +219,7 @@ class BaseActivity(ABC, VersionedModel):
                     os.remove(tmp)
         assert isinstance(usr_txt, str)
         usr_msg = Message(role=Role.USR, body=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
+        logger.debug(f"Adding usr_msg to transcript ({self._transcript})")
         self._transcript.add_msg(usr_msg)
         messages = self._prompt + self._transcript.messages
         logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
