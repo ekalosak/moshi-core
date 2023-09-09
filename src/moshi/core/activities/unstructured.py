@@ -74,11 +74,13 @@ class Unstructured(BaseActivity):
             body=self.user_prompt,
         )
         msgs.append(msg)
+        # TODO figure out a way to provide the "goal glue" in the target language.
+        # e.g. saying "for example" here in en-US will not get translated.
         for goal in self.goals:
-            payload = f"One of your goals is to: {goal.title}. {goal.description}. For example: "
+            payload = f"{goal.title}. {goal.description}. "
             for example in goal.examples:
-                payload += f"'{example}', or "
-            payload = payload[:-5] + "."
+                payload += f"'{example}', "
+            payload = payload[:-2] + "."
             msg = Message(
                 role=Role.SYS,
                 body=payload,

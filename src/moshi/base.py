@@ -11,25 +11,25 @@ class VersionedModel(BaseModel):
     moshi_version: str = moshi_version
 
 class Role(str, Enum):
-    SYS = "sys"
-    USR = "usr"
-    AST = "ast"
+    SYS = "system"
+    USR = "user"
+    AST = "assistant"
 
 class AudioStorage(BaseModel):
     """Where the audio for a message is stored."""
     path: str
     bucket: str = None
 
-class Translation(BaseModel):
-    text: str
-    language: str
-    # audio: AudioStorage | None = None
+# class Translation(BaseModel):
+#     body: str
+#     language: str
+#     # audio: AudioStorage | None = None
 
 class Message(VersionedModel):
     role: Role
     body: str
     audio: AudioStorage | None = None
-    translation: Translation | None = None
+    translation: str | None = None
 
 # TODO Model(ABC, str, Enum), ChatModel(Model), CompletionModel(Model)
 class ModelType(str, Enum):
