@@ -59,6 +59,7 @@ class BaseActivity(ABC, VersionedModel):
         """
         pass
 
+    @property
     @traced
     @abstractmethod
     def prompt(self) -> list[Message]:
@@ -221,7 +222,7 @@ class BaseActivity(ABC, VersionedModel):
         usr_msg = Message(role=Role.USR, body=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
         logger.debug(f"Adding usr_msg to transcript ({self._transcript})")
         self._transcript.add_msg(usr_msg)
-        messages = self._prompt + self._transcript.messages
+        messages = self.prompt + self._transcript.messages
         logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
         ast_txt = self._character.complete(messages)
         assert len(ast_txt) == 1, "Character response should be a single message."
