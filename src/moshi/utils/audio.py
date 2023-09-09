@@ -64,8 +64,7 @@ def _wavp2af(waf: Path) -> av.AudioFrame:
 def wav2af(wav: bytes | io.BytesIO | Path):
     """Convert a wav file to an AudioFrame."""
     if isinstance(wav, bytes):
-        wav = io.BytesIO(wav)
-        return _wavb2af(wav)
+        return _wavb2af(io.BytesIO(wav))
     elif isinstance(wav, io.BytesIO):
         return _wavb2af(wav)
     elif isinstance(wav, Path):

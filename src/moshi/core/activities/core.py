@@ -77,6 +77,10 @@ class BaseActivity(ABC, VersionedModel):
             return None
 
     @property
+    def language(self) -> str:
+        return self.user.language
+
+    @property
     def voice(self) -> str | None:
         try:
             return self._character.voice
@@ -207,7 +211,7 @@ class BaseActivity(ABC, VersionedModel):
             tmp = None
             try:
                 tmp = audio.download(usr_audio_storage_name)
-                with open(tmp, 'rb') as f:
+                with open(tmp, "rb") as f:
                     usr_audio_bytes = f.read()
                 usr_txt = speech.transcribe(usr_audio_bytes, self.language)
             finally:

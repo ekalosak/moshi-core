@@ -20,6 +20,10 @@ logger.info(f"GOOGLE_SPEECH_SYNTHESIS_TIMEOUT={GOOGLE_SPEECH_SYNTHESIS_TIMEOUT} 
 sclient = stt.SpeechClient()
 client = tts.TextToSpeechClient()
 
+class TranscriptionError(Exception):
+    """Raised when transcription fails."""
+    pass
+
 def gender_match(g1: str, g2: tts.SsmlVoiceGender) -> bool:
     if g1.lower() == "female" and g2 == 2:
         return True
@@ -126,21 +130,35 @@ def transcribe(aud: str | bytes, bcp47: str) -> str:
     Notes:
         - https://cloud.google.com/speech-to-text/docs/error-messages
             - "Invalid recognition 'config': bad encoding"
+        - https://cloud.google.com/speech-to-text/docs/troubleshooting#returns_an_empty_response
+            - Usually it's the emulator's mic being disabled...
     """
-    with logger.contextualize(aud=aud, bcp47=bcp47):
+    with logger.contextualize(aud=aud if isinstance(aud, str) else 'bytes ommitted', bcp47=bcp47):
         logger.debug("Transcription has no timeout.")
-        config = stt.RecognitionConfig(language_code=bcp47)
         if isinstance(aud, str):
+            config = stt.RecognitionConfig(language_code=bcp47)
             audio = stt.RecognitionAudio(uri=aud)
         elif isinstance(aud, bytes):
+            config = stt.RecognitionConfig(
+                # NOTE wav and flac get encoding and sample rate from the file headers.
+                # encoding=stt.RecognitionConfig.AudioEncoding.LINEAR16,
+                # sample_rate_hertz=16000,
+                language_code=bcp47,
+            )
             audio = stt.RecognitionAudio(content=aud)
         else:
             raise TypeError(f"Invalid type for 'aud': {type(aud)}")
         logger.debug(f"RecognitionConfig: {config}")
-        logger.debug(f"RecognitionAudio: {audio}")
+        logger.debug(f"RecognitionAudio: {audio if isinstance(aud, str) else 'bytes ommitted'}")
         response = sclient.recognize(config=config, audio=audio)
-        text = response.results[0].alternatives[0].transcript
-        conf = response.results[0].alternatives[0].confidence
+        logger.debug(f"response={response}")
+        try:
+            text = response.results[0].alternatives[0].transcript
+            conf = response.results[0].alternatives[0].confidence
+        except IndexError as exc:
+            logger.debug(exc)
+            logger.error("No transcription found. Usually this means silent audio, but it could be corrupted audio.")
+            raise TranscriptionError() from exc
         with logger.contextualize(confidence=conf):
             logger.log("TRANSCRIPT", shorten(text, 96))
         return text
