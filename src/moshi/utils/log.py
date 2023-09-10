@@ -4,6 +4,7 @@ import sys
 import time
 
 # from google.cloud import logging  # NOTE building for functions so cloud logging via stdout
+import loguru
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 
@@ -49,13 +50,15 @@ def _gcp_log_severity_map(level: str) -> str:
 def _format_timedelta(td) -> str:
     return f"{td.days}days{td.seconds}secs{td.microseconds}usecs"
 
-
-def _to_log_dict(rec: dict) -> dict:
+def _to_log_dict(rec: loguru._handler.Message) -> dict:
     """Convert a loguru record to a gcloud structured logging payload."""
+    rec = rec.record
     rec["severity"] = _gcp_log_severity_map(rec["level"].name)
     rec.pop("level")
     if not rec["extra"]:
         rec.pop("extra")
+    else:
+        rec["extra"] = str(rec["extra"])
     rec["elapsed"] = _format_timedelta(rec["elapsed"])
     if "exception" in rec:
         if rec["exception"] is not None:
@@ -73,23 +76,40 @@ def _to_log_dict(rec: dict) -> dict:
     rec.pop("time")
     return rec
 
+# def custom_formatter(record):
+#     log_dict = {
+#         "timestamp": record["time"].strftime("%Y-%m-%d %H:%M:%S.%f"),
+#         "level": record["level"].name,
+#         "message": record["message"],
+#         "function": record["function"],
+#         "line": record["line"],
+#         "file": record["file"],
+#         "extra": str(record["extra"]),  # Convert extra dictionary to a string
+#     }
+#     return log_dict
 
-def setup_loguru():
+
+def setup_loguru(fmt=LOG_FORMAT):
     logger.debug("Adding stdout logger...")
-    if LOG_FORMAT == "json":
+    colorize = ENV == "dev" or LOG_COLORIZE or fmt == "rich"
+    diagnose = ENV == "dev"
+    if fmt == "json":
         logger.debug("Using JSON formatter...")
-        formatter = _to_log_dict
+        def sink(rec):
+            print(_to_log_dict(rec))
     else:
         logger.debug("Using LOGURU formatter...")
-        formatter = LOGURU_FORMAT
+        sink = sys.stdout
+    try:
+        logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
+    except TypeError:
+        logger.debug("TRANSCRIPT level already defined.")
     logger.remove()
-    logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
-    logger.add(
-        diagnose=ENV=="dev",
-        sink=sys.stdout,
+    logger.add(sink,
+        diagnose=diagnose,
         level=LOG_LEVEL,
-        format=formatter,
-        colorize=ENV=="dev" or LOG_COLORIZE,
+        format=LOGURU_FORMAT,
+        colorize=colorize,
     )
 
 logger.success("Logging configured.")
