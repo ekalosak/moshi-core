@@ -73,8 +73,8 @@ def _to_log_dict(rec: loguru._handler.Message) -> dict:
     rec["thread_id"] = rec["thread"].id
     rec["thread_name"] = rec["thread"].name
     rec.pop("thread")
-    rec["timestamp"] = str(rec["time"])
-    rec.pop("time")
+    # Time in RFC3339
+    rec["time"] = rec["time"].strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     return rec
 
 # def custom_formatter(record):
