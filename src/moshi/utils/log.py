@@ -1,4 +1,5 @@
 import functools
+import json
 import os
 import sys
 import time
@@ -96,7 +97,7 @@ def setup_loguru(fmt=LOG_FORMAT):
     if fmt == "json":
         logger.debug("Using JSON formatter...")
         def sink(rec):
-            print(_to_log_dict(rec))
+            print(json.dumps(_to_log_dict(rec)))
     else:
         logger.debug("Using LOGURU formatter...")
         sink = sys.stdout

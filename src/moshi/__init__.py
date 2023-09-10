@@ -1,7 +1,8 @@
+__version__ = "23.9.2"
+
 import os
 GCLOUD_PROJECT = os.getenv("GCLOUD_PROJECT", "moshi-3")
 
-from .version import __version__
 from .utils import log
 log.setup_loguru()
 from loguru import logger
