@@ -13,7 +13,7 @@ from moshi import Message, Model, ModelType, Role
 from moshi.utils import secrets
 from moshi.utils.log import traced
 
-STOP_TOKENS = os.getenv("OPENAI_STOP_TOKENS", ["\n", "1:", "2:"])
+STOP_TOKENS = os.getenv("OPENAI_STOP_TOKENS", ["\n\n", '.', '?', '!'])
 logger.info(f"STOP_TOKENS={STOP_TOKENS}")
 
 ChatCompletionPayload = NewType("ChatCompletionPayload", list[dict[str, str]])
@@ -147,6 +147,7 @@ def from_assistant(
     Details on args:
         https://platform.openai.com/docs/api-reference/chat/create
     """
+    DEFAULT_TOKENS = 50
     with logger.contextualize(nmsg=len(messages), n=n, model=model, user=user, **kwargs):
         if isinstance(messages, Message):
             messages = [messages]
@@ -154,10 +155,10 @@ def from_assistant(
         if n > 1:
             logger.warning(f"Generating many responses at once can be costly: n={n}")
         if 'max_tokens' not in kwargs:
-            logger.warning(f"max_tokens not specified, using default: 150")
-            kwargs['max_tokens'] = 150
-        if kwargs['max_tokens'] > 150:
-            logger.warning(f"max_tokens > 150, this may be costly and may cause partial audio to be generated: {kwargs['max_tokens']}")
+            logger.warning(f"max_tokens not specified, using default: {DEFAULT_TOKENS}")
+            kwargs['max_tokens'] = DEFAULT_TOKENS
+        if kwargs['max_tokens'] > DEFAULT_TOKENS:
+            logger.warning(f"max_tokens > {DEFAULT_TOKENS}, this may be costly and may cause partial audio to be generated: {kwargs['max_tokens']}")
         secrets.login_openai()
         msg_contents = []
         if user:

@@ -8,7 +8,7 @@ from moshi.core.activities import BaseActivity
 class Goal(BaseModel):
     title: str
     description: str
-    examples: list[str]
+    examples: list[str] = []
 
 class Translation(BaseModel):
     goals: list[Goal]
