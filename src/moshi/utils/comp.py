@@ -159,7 +159,6 @@ def from_assistant(
             kwargs['max_tokens'] = DEFAULT_TOKENS
         if kwargs['max_tokens'] > DEFAULT_TOKENS:
             logger.warning(f"max_tokens > {DEFAULT_TOKENS}, this may be costly and may cause partial audio to be generated: {kwargs['max_tokens']}")
-        secrets.login_openai()
         msg_contents = []
         if user:
             kwargs["user"] = user
