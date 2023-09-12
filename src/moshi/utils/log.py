@@ -84,17 +84,17 @@ def _toGCPFormat(rec: loguru._handler.Message) -> str:
     rec["time"] = _toRFC3339(rec["time"])
     return json.dumps(rec)
 
-def setup_loguru(fmt=LOG_FORMAT, sink=sys.stdout):
+def setup_loguru(fmt=LOG_FORMAT, sink=sys.stdout.write):
     logger.debug("Adding stdout logger...")
     colorize = ENV == "dev" or LOG_COLORIZE or fmt == "rich"
     diagnose = ENV == "dev"
     if fmt == "json":
         logger.debug("Using JSON formatter...")
         def _sink(rec):
-            sink.write(_toGCPFormat(rec) + "\n")
+            sink(_toGCPFormat(rec) + "\n")
     else:
         logger.debug("Using LOGURU formatter...")
-        _sink = sys.stdout
+        _sink = sink
     try:
         logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
     except TypeError:
