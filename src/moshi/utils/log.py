@@ -51,7 +51,15 @@ def _gcp_log_severity_map(level: str) -> str:
 def _format_timedelta(td) -> str:
     return f"{td.days}days{td.seconds}secs{td.microseconds}usecs"
 
-def _to_log_dict(rec: loguru._handler.Message) -> dict:
+def _jsonify(extra: dict) -> str:
+    """map datetimes to RFC3339, then json dumps"""
+    return json.dumps(extra, default=lambda o: _toRFC3339(o) if hasattr(o, "isoformat") else str(o))
+
+def _toRFC3339(dt):
+    """Convert a datetime to RFC3339."""
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+def _toGCPFormat(rec: loguru._handler.Message) -> str:
     """Convert a loguru record to a gcloud structured logging payload."""
     rec = rec.record
     rec["severity"] = _gcp_log_severity_map(rec["level"].name)
@@ -59,7 +67,7 @@ def _to_log_dict(rec: loguru._handler.Message) -> dict:
     if not rec["extra"]:
         rec.pop("extra")
     else:
-        rec["extra"] = str(rec["extra"])
+        rec["extra"] = _jsonify(rec["extra"])
     rec["elapsed"] = _format_timedelta(rec["elapsed"])
     if "exception" in rec:
         if rec["exception"] is not None:
@@ -73,40 +81,26 @@ def _to_log_dict(rec: loguru._handler.Message) -> dict:
     rec["thread_id"] = rec["thread"].id
     rec["thread_name"] = rec["thread"].name
     rec.pop("thread")
-    # Time in RFC3339
-    rec["time"] = rec["time"].strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    return rec
+    rec["time"] = _toRFC3339(rec["time"])
+    return json.dumps(rec)
 
-# def custom_formatter(record):
-#     log_dict = {
-#         "timestamp": record["time"].strftime("%Y-%m-%d %H:%M:%S.%f"),
-#         "level": record["level"].name,
-#         "message": record["message"],
-#         "function": record["function"],
-#         "line": record["line"],
-#         "file": record["file"],
-#         "extra": str(record["extra"]),  # Convert extra dictionary to a string
-#     }
-#     return log_dict
-
-
-def setup_loguru(fmt=LOG_FORMAT):
+def setup_loguru(fmt=LOG_FORMAT, sink=sys.stdout):
     logger.debug("Adding stdout logger...")
     colorize = ENV == "dev" or LOG_COLORIZE or fmt == "rich"
     diagnose = ENV == "dev"
     if fmt == "json":
         logger.debug("Using JSON formatter...")
-        def sink(rec):
-            print(json.dumps(_to_log_dict(rec)))
+        def _sink(rec):
+            sink.write(_toGCPFormat(rec) + "\n")
     else:
         logger.debug("Using LOGURU formatter...")
-        sink = sys.stdout
+        _sink = sys.stdout
     try:
         logger.level("TRANSCRIPT", no=15, color="<magenta>", icon="📜")
     except TypeError:
         logger.debug("TRANSCRIPT level already defined.")
     logger.remove()
-    logger.add(sink,
+    logger.add(_sink,
         diagnose=diagnose,
         level=LOG_LEVEL,
         format=LOGURU_FORMAT,

@@ -5,14 +5,10 @@ import pytest
 
 from moshi.utils import log
 
-def test_default_logging():
-    importlib.reload(log)
-    importlib.reload(loguru)
-    loguru.logger.debug("test")
-
-def test_json_logging(monkeypatch):
-    monkeypatch.setenv("LOG_FORMAT", "json")
-    importlib.reload(log)
-    importlib.reload(loguru)
-    log.setup_loguru()
-    loguru.logger.debug("test")
+@pytest.mark.parametrize("fmt", [None, "", "json", "rich"])
+def test_logging(fmt: str):
+    loguru.logger.debug("before")
+    print("RUN SETUP")
+    log.setup_loguru(fmt=fmt)
+    print("DONE")
+    loguru.logger.debug("after")
