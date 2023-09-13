@@ -55,6 +55,7 @@ def list_voices(bcp47: str) -> list[tts.Voice]:
             name=name,
             ssml_gender=model['ssml_gender'],
             natural_sample_rate_hertz=24000,
+            language_codes=[bcp47],
         ) for name, model in _voices.items()]
     except (IndexError, AssertionError) as exc:
         logger.error(f"Failed to get voices from Firebase: {exc}")
@@ -94,7 +95,7 @@ def get_voice(bcp47: str, gender="FEMALE", model="Standard", random_choice=True)
     voices = gender_matches
     if len(voices) > 0:
         voice = random.choice(voices)
-        logger.debug(f"Found voice: {voice}")
+        logger.debug(f"Found voice: ({voice.name} {voice.ssml_gender})")
         return voice
     raise ValueError(f"Voice not found for {bcp47}, gender={gender}, model={model}")
 
