@@ -190,7 +190,7 @@ def transcribe(aud: str | bytes, bcp47: str) -> str:
         except IndexError as exc:
             logger.debug(exc)
             logger.error("No transcription found. Usually this means silent audio, but it could be corrupted audio.")
-            raise TranscriptionError() from exc
+            return "👂❌ We couldn't hear you. Please ensure your microphone is enabled, and try holding the button down for 1/2 sec before you speak."
         with logger.contextualize(confidence=conf):
             logger.log("TRANSCRIPT", shorten(text, 96))
         return text
