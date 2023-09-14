@@ -59,7 +59,6 @@ def _jsonify(obj):
     """Convert an object to JSON serializable."""
     if hasattr(obj, "isoformat"):
         return _toRFC3339(obj)
-    logger.warning(f"Unhandled type {type(obj)}")
     return str(obj)
 
 def _toGCPFormat(rec: loguru._handler.Message) -> str:
@@ -84,7 +83,7 @@ def _toGCPFormat(rec: loguru._handler.Message) -> str:
     rec.pop("thread")
     return json.dumps(rec, default=lambda o: _jsonify(o))
 
-def setup_loguru(fmt=LOG_FORMAT, sink=sys.stdout.write):
+def setup_loguru(fmt=LOG_FORMAT, sink=print):
     logger.debug("Adding stdout logger...")
     colorize = ENV == "dev" or LOG_COLORIZE or fmt == "rich"
     diagnose = ENV == "dev"
