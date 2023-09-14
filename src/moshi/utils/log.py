@@ -59,6 +59,9 @@ def _jsonify(obj):
     """Convert an object to JSON serializable."""
     if hasattr(obj, "isoformat"):
         return _toRFC3339(obj)
+    if hasattr(obj, "to_json"):
+        return obj.to_json()
+    print(f"WARNING: unhandled type: {type(obj)}")
     return str(obj)
 
 def _toGCPFormat(rec: loguru._handler.Message) -> str:
