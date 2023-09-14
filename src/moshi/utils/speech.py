@@ -63,7 +63,7 @@ def list_voices(bcp47: str) -> list[tts.Voice]:
         voices = response.voices
     return voices
 
-def get_voice(bcp47: str, gender="FEMALE", model="Standard", random_choice=True) -> str:
+def get_voice(bcp47: str, gender="FEMALE", model="Standard", random_choice=False) -> str:
     """Get a valid voice for the language. Just picks the first match.
     Args:
         - bcp47: Language code in BPC 47 format e.g. "en-US" https://www.rfc-editor.org/rfc/bcp/bcp47.txt
