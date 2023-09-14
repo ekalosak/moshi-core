@@ -38,7 +38,7 @@ def test_json_serialization(serialize_me):
         loguru.logger.debug("test")
     assert len(_log) == 1, "sent more than one log message"
     rec = json.loads(_log[0])
-    extra = json.loads(rec["extra"])
+    extra = rec["extra"]
     if isinstance(serialize_me, datetime):
         payload = datetime.fromisoformat(extra['payload']).isoformat()
         assert payload == serialize_me.isoformat() + "+00:00", "failed to serialize payload"

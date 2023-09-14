@@ -51,13 +51,16 @@ def _gcp_log_severity_map(level: str) -> str:
 def _format_timedelta(td) -> str:
     return f"{td.days}days{td.seconds}secs{td.microseconds}usecs"
 
-def _jsonify(extra: dict) -> str:
-    """map datetimes to RFC3339, then json dumps"""
-    return json.dumps(extra, default=lambda o: _toRFC3339(o) if hasattr(o, "isoformat") else str(o))
-
 def _toRFC3339(dt):
     """Convert a datetime to RFC3339."""
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+def _jsonify(obj):
+    """Convert an object to JSON serializable."""
+    if hasattr(obj, "isoformat"):
+        return _toRFC3339(obj)
+    logger.warning(f"Unhandled type {type(obj)}")
+    return str(obj)
 
 def _toGCPFormat(rec: loguru._handler.Message) -> str:
     """Convert a loguru record to a gcloud structured logging payload."""
@@ -66,8 +69,6 @@ def _toGCPFormat(rec: loguru._handler.Message) -> str:
     rec.pop("level")
     if not rec["extra"]:
         rec.pop("extra")
-    else:
-        rec["extra"] = _jsonify(rec["extra"])
     rec["elapsed"] = _format_timedelta(rec["elapsed"])
     if "exception" in rec:
         if rec["exception"] is not None:
@@ -81,8 +82,7 @@ def _toGCPFormat(rec: loguru._handler.Message) -> str:
     rec["thread_id"] = rec["thread"].id
     rec["thread_name"] = rec["thread"].name
     rec.pop("thread")
-    rec["time"] = _toRFC3339(rec["time"])
-    return json.dumps(rec)
+    return json.dumps(rec, default=lambda o: _jsonify(o))
 
 def setup_loguru(fmt=LOG_FORMAT, sink=sys.stdout.write):
     logger.debug("Adding stdout logger...")
