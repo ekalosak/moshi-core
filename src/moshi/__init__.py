@@ -1,4 +1,4 @@
-__version__ = "23.9.9"
+__version__ = "23.9.10"
 
 import os
 GCLOUD_PROJECT = os.getenv("GCLOUD_PROJECT", "moshi-3")
