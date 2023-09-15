@@ -20,8 +20,11 @@ from moshi.utils.log import traced
 db = firestore.Client(project=GCLOUD_PROJECT)
 
 @traced
-def sample_activity_id(activity_type: str, level: int):
-    """Get a random activity id for the given type and <= level."""
+def sample_activity_id(activity_type: str, level: int, latest=True):
+    """Get a random activity id for the given type and <= level.
+    If latest==True, get the latest matching lesson id.
+    Otherwise, get a random matching lesson id.
+    """
     activity_col = db.collection('activities')
     query = activity_col.where(filter=FieldFilter('type', '==', activity_type)).where(filter=FieldFilter('config.level', '<=', level)).order_by('config.level', direction=firestore.Query.DESCENDING).limit(10)
     docs = list(query.stream())
@@ -29,7 +32,13 @@ def sample_activity_id(activity_type: str, level: int):
         logger.debug(f"Found activity: {doc.id}")
     if not docs:
         raise ValueError(f"No activities found for type: {activity_type} and level: {level}")
-    return random.choice(docs).id
+    if latest:
+        doc = sorted(docs, key=lambda d: d.get('created_at'), reverse=True)[0]
+        logger.debug(f"Latest activity: {doc.get('created_at')} {doc.id}")
+    else:
+        doc = random.choice(docs)
+        logger.debug(f"Random activity: {doc.get('created_at')} {doc.id}")
+    return doc.id
 
 class BaseActivity(ABC, VersionedModel):
     """An Activity provides access to the content required for a user session.
