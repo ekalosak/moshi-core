@@ -20,13 +20,20 @@ from moshi.utils.log import traced
 db = firestore.Client(project=GCLOUD_PROJECT)
 
 @traced
-def sample_activity_id(activity_type: str, level: int, latest=True):
+def sample_activity_id(activity_type: str, name: str | None = None, level: int=1, latest=True):
     """Get a random activity id for the given type and <= level.
     If latest==True, get the latest matching lesson id.
     Otherwise, get a random matching lesson id.
     """
     activity_col = db.collection('activities')
-    query = activity_col.where(filter=FieldFilter('type', '==', activity_type)).where(filter=FieldFilter('config.level', '<=', level)).order_by('config.level', direction=firestore.Query.DESCENDING).limit(10)
+    if activity_type == 'lesson':
+        if name is None:
+            raise ValueError("Must specify a name for a lesson.")
+        query = activity_col.where(filter=FieldFilter('type', '==', activity_type)).where(filter=FieldFilter('config.topic', '==', name)).where(filter=FieldFilter('config.level', '<=', level)).order_by('config.level', direction=firestore.Query.DESCENDING).limit(10)
+    elif activity_type == 'unstructured':
+        query = activity_col.where(filter=FieldFilter('type', '==', activity_type)).where(filter=FieldFilter('config.level', '<=', level)).order_by('config.level', direction=firestore.Query.DESCENDING).limit(10)
+    else:
+        raise ValueError(f"Invalid activity type: {activity_type}; must be one of ['lesson', 'unstructured']")
     docs = list(query.stream())
     for doc in docs:
         logger.debug(f"Found activity: {doc.id}")
