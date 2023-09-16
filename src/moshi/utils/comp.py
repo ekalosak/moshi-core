@@ -176,4 +176,13 @@ def from_assistant(
         assert all(isinstance(mc, str) for mc in msg_contents)
         return msg_contents
 
+
+def summarize(text: str, summary_length: int, **kwargs) -> str:
+    """Summarize <text> using <model>."""
+    secrets.login_openai()
+    sysmsg = Message(role=Role.SYS, body=f"Summarize the following text in no more than {summary_length} words.")
+    usrmsg = Message(role=Role.USR, body=text)
+    prompt = [sysmsg, usrmsg]
+    return from_assistant(prompt, n=1, **kwargs)[0]
+
 logger.success("Completion module loaded.")
