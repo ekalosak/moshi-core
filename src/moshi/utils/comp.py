@@ -177,12 +177,11 @@ def from_assistant(
         return msg_contents
 
 
-def summarize(text: str, summary_length: int, **kwargs) -> str:
+def summarize(conversation: list[Message], summary_length: int, summary_language: str, **kwargs) -> str:
     """Summarize <text> using <model>."""
     secrets.login_openai()
-    sysmsg = Message(role=Role.SYS, body=f"Summarize the following text in no more than {summary_length} words.")
-    usrmsg = Message(role=Role.USR, body=text)
-    prompt = [sysmsg, usrmsg]
-    return from_assistant(prompt, n=1, **kwargs)[0]
+    sysmsg = Message(role=Role.SYS, body=f"Summarize the user session in {summary_language} in no more than {summary_length} words.")
+    conversation.append(sysmsg)
+    return from_assistant(conversation, n=1, **kwargs)[0]
 
 logger.success("Completion module loaded.")
