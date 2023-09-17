@@ -73,6 +73,7 @@ def translate_text(text: str, target: str) -> str:
         logger.trace(f"Translating: {textwrap.shorten(text, 64)}")
         result = client.translate(values=text, target_language=target)
         translated_text = result["translatedText"]
+        translated_text = translated_text.replace("&#39;", "'")
         logger.trace(f"Translated to: {textwrap.shorten(translated_text, 64)}")
     return translated_text
 
