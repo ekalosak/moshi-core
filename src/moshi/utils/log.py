@@ -13,7 +13,7 @@ LOGURU_FORMAT = LOGURU_FORMAT + " | <g><d>{extra}</d></g>"
 
 ENV = os.getenv("ENV", "prod")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
-LOG_FORMAT = os.getenv("LOG_FORMAT", "rich")  # either json or anything else
+LOG_FORMAT = os.getenv("LOG_FORMAT", "json")  # either json or anything else
 LOG_COLORIZE = int(os.getenv("LOG_COLORIZE", 0))
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} LOG_FORMAT={LOG_FORMAT} LOG_COLORIZE={LOG_COLORIZE}")
 if ENV == "dev":
