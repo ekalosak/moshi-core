@@ -38,7 +38,7 @@ def a2int(audio_name: str) -> int:
 class Transcript(VersionedModel):
     activity_id: str
     language: str
-    messages: list[Message]
+    messages: list[Message] = []
     transcript_id: str = None
     user_id: str = None
 
@@ -70,11 +70,16 @@ class Transcript(VersionedModel):
             doc_ref = transcript_col.document(self.tid)
         else:
             logger.info("Creating new conversation document.")
-            doc_ref = transcript_col.document()
-            self.transcript_id = doc_ref.id
+            doc_ref = transcript_col.document(self.transcript_id or None)
+            print("##")
+            print(self.transcript_id)
+            self.transcript_id = self.transcript_id or doc_ref.id
         with logger.contextualize(tid=self.tid, aid=self.aid):
             logger.trace(f"[START] Saving conversation document.")
             payload = message_to_payload(msg)
+            print(payload)
+            print(doc_ref.id)
+            exit()
             logger.debug(f"Payload: {payload}")
             doc_ref.update({"messages": firestore.ArrayUnion([payload])})
             # doc_ref.set({"messages": firestore.ArrayUnion([payload])})
