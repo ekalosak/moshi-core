@@ -32,7 +32,6 @@ def a2int(audio_name: str) -> int:
     """Convert an audio name to an integer."""
     with logger.contextualize(audio_name=audio_name):
         fn = audio_name.split('/')[-1]
-        logger.trace(f"Converting audio name to int: {fn}")
         return int(fn.split('-')[0])
 
 class Transcript(VersionedModel):

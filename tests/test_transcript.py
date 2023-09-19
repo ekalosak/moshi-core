@@ -45,6 +45,19 @@ def transcript_fxt(user_fxt):
     print(f"added transcript={t} to db: {writeresult}")
     return t
 
+def test_skeleton():
+    t = transcript.skeleton("test", "es-MX", "en-US")
+    print(t)
+
+def test_message_to_payload():
+    msg = Message(body="Hello", role=Role.USR)
+    payload = transcript.message_to_payload(msg)
+    print(payload)
+    assert isinstance(payload, dict)
+
+def test_a2int():
+    assert transcript.a2int("42-test.wav") == 42
+
 @pytest.mark.skipif(os.getenv("FIRESTORE_EMULATOR_HOST") is None, reason="FIRESTORE_EMULATOR_HOST not set")
 @pytest.mark.skipif(transcript.client.project != db.project, reason="Test client project does not match transcript client project")
 def test_messages(transcript_fxt):
