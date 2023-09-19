@@ -49,10 +49,17 @@ def transcript_fxt(user_fxt):
 @pytest.mark.skipif(transcript.client.project != db.project, reason="Test client project does not match transcript client project")
 def test_messages(transcript_fxt):
     t = transcript_fxt
-    print("TRANSCRIPT")
+    print("TRANSCRIPT CREATED:")
     print(t.model_dump())
     msg1 = Message(body="Hello", role=Role.USR)
     msg2 = Message(body="Hi", role=Role.AST)
     for msg in [msg1, msg2]:
-        print("ADD MSG")
         t.add_msg(msg)
+    # check that the messages are in the transcript
+    assert len(t.messages) == 2
+    doc_ref = db.collection("users").document(t.uid).collection("transcripts").document(t.tid)
+    doc = doc_ref.get()
+    assert doc.exists
+    print("TRANSCRIPT AFTER ROUND TRIP, FROM FB:")
+    print(doc.to_dict())
+    assert len(doc.to_dict()["messages"]) == 2

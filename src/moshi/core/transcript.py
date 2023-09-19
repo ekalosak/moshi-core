@@ -79,7 +79,6 @@ class Transcript(VersionedModel):
             payload = message_to_payload(msg)
             print(payload)
             print(doc_ref.id)
-            exit()
             logger.debug(f"Payload: {payload}")
             doc_ref.update({"messages": firestore.ArrayUnion([payload])})
             # doc_ref.set({"messages": firestore.ArrayUnion([payload])})
