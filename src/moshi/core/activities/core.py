@@ -266,7 +266,7 @@ class BaseActivity(ABC, VersionedModel):
         logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
         ast_txt = self._character.complete(messages)
         ast_audio_storage_name = audio.make_ast_audio_name(usr_audio_storage_name)
-        ast_msg = self._synthesize(ast_txt)
+        ast_msg = self._synthesize(ast_txt, ast_audio_storage_name)
         self._transcript.add_msg(ast_msg)
         logger.trace(f"Responded to: {usr_audio_storage_name}")
         return ast_audio_storage_name

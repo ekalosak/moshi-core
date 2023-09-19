@@ -11,7 +11,7 @@ class ActivityType(str, Enum):
     # TOPICAL = "topical"  # talk about a specific topic e.g. sports, politics, etc.
     LESSON = "lesson"  # e.g. (beginner, introductions), (intermediate, small talk), (advanced, debate), play out a scenario e.g. a job interview, ordering coffee, etc.
 
-def new(activity_type: str, usr: User, level: int=1, name: str | None = None, latest: bool=True, start=True) -> BaseActivity:
+def new(activity_type: str, user: User, level: int=1, name: str | None = None, latest: bool=True, start=True) -> BaseActivity:
     """Create a new activity for the user."""
     aid = sample_activity_id(
         activity_type=activity_type,
@@ -20,9 +20,9 @@ def new(activity_type: str, usr: User, level: int=1, name: str | None = None, la
         latest=latest,
     )
     if activity_type == ActivityType.UNSTRUCTURED.value:
-        act = Unstructured(user=usr)
+        act = Unstructured(user=user)
     elif activity_type == ActivityType.LESSON.value:
-        act = Lesson(user=usr)
+        act = Lesson(user=user)
     else:
         raise ValueError(f"Invalid activity type: '{activity_type}', must be one of {[m.value for m in ActivityType.__members__.values()]}")
     if start:

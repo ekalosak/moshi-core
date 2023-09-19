@@ -56,7 +56,7 @@ class Transcript(VersionedModel):
     def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
-            key = f"{msg.role.name}-{len(self.messages)}"
+            key = f"{msg.role.name}{len(self.messages)}"
             logger.debug(f"Adding message to transcript: {key}: {msg}")
             self.messages[key] = msg
             self._append_to_doc(key)
@@ -80,5 +80,5 @@ class Transcript(VersionedModel):
             # messages is {"AST0": {Message}, "USR1": {Message}, ...}
             # or with any all caps AST, USR, SYS, etc.
             key = f"{msg.role.name}{len(self.messages) - 1}"
-            doc_ref.update({f"messages.{key}": {key: payload}}, )
+            doc_ref.update({f"messages.{key}": payload}, )
             logger.trace(f"[END] Saving conversation document.")
