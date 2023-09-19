@@ -14,7 +14,6 @@ def skeleton(activity_id: str, language: str, native_language: str) -> dict:
         'activity_id': activity_id,
         'language': language,  # NOTE redundant by activity but useful for querying upon finalization etc.
         'native_language': native_language,
-        'messages': [],
         'created_at': datetime.now(),
         'moshi_version': moshi_version,
     }
@@ -60,11 +59,12 @@ class Transcript(VersionedModel):
             key = f"{msg.role.name}-{len(self.messages)}"
             logger.debug(f"Adding message to transcript: {key}: {msg}")
             self.messages[key] = msg
-            self.append_to_doc(msg)
+            self._append_to_doc(key)
 
     @traced
-    def append_to_doc(self, msg: Message):
+    def _append_to_doc(self, key: str):
         """Save the transcript to Firestore."""
+        msg = self.messages[key]
         transcript_col = client.collection("users").document(self.uid).collection("transcripts")
         if self.tid:
             logger.debug("Updating existing doc.")
@@ -72,15 +72,13 @@ class Transcript(VersionedModel):
         else:
             logger.info("Creating new conversation document.")
             doc_ref = transcript_col.document(self.transcript_id or None)
-            print("##")
-            print(self.transcript_id)
             self.transcript_id = self.transcript_id or doc_ref.id
         with logger.contextualize(tid=self.tid, aid=self.aid):
             logger.trace(f"[START] Saving conversation document.")
             payload = message_to_payload(msg)
-            print(payload)
-            print(doc_ref.id)
-            logger.debug(f"Payload: {payload}")
-            doc_ref.update({"messages": firestore.ArrayUnion([payload])})
-            # doc_ref.set({"messages": firestore.ArrayUnion([payload])})
+            logger.debug(f"payload={payload}")
+            # messages is {"AST0": {Message}, "USR1": {Message}, ...}
+            # or with any all caps AST, USR, SYS, etc.
+            key = f"{msg.role.name}{len(self.messages) - 1}"
+            doc_ref.update({f"messages.{key}": {key: payload}}, )
             logger.trace(f"[END] Saving conversation document.")

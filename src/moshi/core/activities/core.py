@@ -89,7 +89,9 @@ class BaseActivity(ABC, VersionedModel):
     @property
     def messages(self) -> list[Message] | None:
         try:
-            return self._transcript.messages
+            # _transcript.messages is a dict, but we want a list
+            # get values sorted by their created_at timestamp
+            return sorted(self._transcript.messages.values(), key=lambda m: m.created_at)
         except AttributeError:
             return None
 
@@ -171,9 +173,10 @@ class BaseActivity(ABC, VersionedModel):
         tdict = transcript.skeleton(self.aid, self.user.language, self.user.native_language)
         doc.set(tdict)
         with logger.contextualize(transcript_id=doc.id):
-            logger.info(f"Initialized transcript.")
             self._transcript = transcript.Transcript(**tdict, transcript_id=doc.id) 
-            logger.debug(f"_transcript={self._transcript}")
+            with logger.contextualize(transcript=self._transcript.model_dump_json()):
+                logger.debug(f"Initialized transcript.")
+            logger.info(f"Initialized transcript.")
 
     @traced
     def _load_character(self):
@@ -209,11 +212,7 @@ class BaseActivity(ABC, VersionedModel):
             logger.warning(f"Created new translation for ongoing activity: {self._aid}")
 
     @traced
-    def respond(self, usr_audio_storage_name: str) -> str:
-        """Main loop iter. From the user's audio, transcribe it, get the character's response, and synthesize it to audio.
-        Returns:
-            The storage id for the character's response audio.
-        """
+    def _transcribe(self, usr_audio_storage_name: str) -> Message:
         logger.trace(f"Responding to: {usr_audio_storage_name}")
         usr_audio_gsid = f"gs://{AUDIO_BUCKET}/{usr_audio_storage_name}"
         try:
@@ -236,16 +235,14 @@ class BaseActivity(ABC, VersionedModel):
                     os.remove(tmp)
         assert isinstance(usr_txt, str)
         usr_msg = Message(role=Role.USR, body=usr_txt, audio={'path': usr_audio_storage_name, 'bucket': AUDIO_BUCKET})
-        logger.debug(f"Adding usr_msg to transcript ({self._transcript})")
-        self._transcript.add_msg(usr_msg)
-        messages = self.prompt + self._transcript.messages
-        logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
-        ast_txt = self._character.complete(messages)
+        return usr_msg
+
+    @traced
+    def _synthesize(self, ast_txt: str, ast_audio_storage_name: str) -> Message:
         assert len(ast_txt) == 1, "Character response should be a single message."
         ast_txt = ast_txt[0]
         assert isinstance(ast_txt, str), "Character response should be a string."
         ast_audio_bytes = speech.synthesize(ast_txt, self.voice, to="bytes")
-        ast_audio_storage_name = audio.make_ast_audio_name(usr_audio_storage_name)
         _, ast_audio_file = tempfile.mkstemp(suffix=".wav", dir='/tmp')
         try:
             with open(ast_audio_file, "wb") as f:
@@ -255,6 +252,21 @@ class BaseActivity(ABC, VersionedModel):
             logger.trace(f"Removing temporary file: {ast_audio_file}")
             os.remove(ast_audio_file)
         ast_msg = Message(role=Role.AST, body=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
-        self._transcript.add_msg(ast_msg)  # NOTE sequence add_msg so the msgs arrive in order (for async)
+
+    @traced
+    def respond(self, usr_audio_storage_name: str) -> str:
+        """Main loop iter. From the user's audio, transcribe it, get the character's response, and synthesize it to audio.
+        Returns:
+            The storage id for the character's response audio.
+        """
+        usr_msg = self._transcribe(usr_audio_storage_name)
+        logger.debug(f"Adding usr_msg to transcript ({self._transcript})")
+        self._transcript.add_msg(usr_msg)
+        messages = self.prompt + self.messages
+        logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
+        ast_txt = self._character.complete(messages)
+        ast_audio_storage_name = audio.make_ast_audio_name(usr_audio_storage_name)
+        ast_msg = self._synthesize(ast_txt)
+        self._transcript.add_msg(ast_msg)
         logger.trace(f"Responded to: {usr_audio_storage_name}")
         return ast_audio_storage_name

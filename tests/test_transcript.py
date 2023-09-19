@@ -6,27 +6,8 @@ import pytest
 from moshi import Message, Role, User
 from moshi.core import transcript
 
-db = firestore.Client(project=os.getenv("GCLOUD_PROJECT", "demo-test"))
-
 @pytest.fixture
-def user_fxt():
-    if not os.getenv("FIRESTORE_EMULATOR_HOST"):
-        raise ValueError("FIRESTORE_EMULATOR_HOST not set")
-    user = User(
-        uid="test",
-        name="test",
-        email="test@dne.dne",
-        language="es-MX",
-        native_language="en-US",
-    )
-    # put it in emulator
-    writeresult = db.collection("users").document(user.uid).set(user.model_dump())
-    print(f"added user={user} to db: {writeresult}")
-    return user
-
-
-@pytest.fixture
-def transcript_fxt(user_fxt):
+def transcript_fxt(user_fxt, db):
     if not os.getenv("FIRESTORE_EMULATOR_HOST"):
         raise ValueError("FIRESTORE_EMULATOR_HOST not set")
     t = transcript.Transcript(
@@ -60,7 +41,7 @@ def test_a2int():
 
 @pytest.mark.skipif(os.getenv("FIRESTORE_EMULATOR_HOST") is None, reason="FIRESTORE_EMULATOR_HOST not set")
 @pytest.mark.skipif(transcript.client.project != db.project, reason="Test client project does not match transcript client project")
-def test_messages(transcript_fxt):
+def test_add_msg(transcript_fxt):
     t = transcript_fxt
     print("TRANSCRIPT CREATED:")
     print(t.model_dump())
@@ -75,4 +56,8 @@ def test_messages(transcript_fxt):
     assert doc.exists
     print("TRANSCRIPT AFTER ROUND TRIP, FROM FB:")
     print(doc.to_dict())
-    assert len(doc.to_dict()["messages"]) == 2
+    assert len(doc.get("messages")) == 2
+    print("USR0:")
+    print(doc.get("messages.USR0"))
+    print("AST1:")
+    print(doc.get("messages.AST1"))
