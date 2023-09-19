@@ -11,7 +11,7 @@ class ActivityType(str, Enum):
     # TOPICAL = "topical"  # talk about a specific topic e.g. sports, politics, etc.
     LESSON = "lesson"  # e.g. (beginner, introductions), (intermediate, small talk), (advanced, debate), play out a scenario e.g. a job interview, ordering coffee, etc.
 
-def new(activity_type: str, usr: User, level: int=1, name: str | None = None, latest: bool=True) -> BaseActivity:
+def new(activity_type: str, usr: User, level: int=1, name: str | None = None, latest: bool=True, start=True) -> BaseActivity:
     """Create a new activity for the user."""
     aid = sample_activity_id(
         activity_type=activity_type,
@@ -25,7 +25,8 @@ def new(activity_type: str, usr: User, level: int=1, name: str | None = None, la
         act = Lesson(user=usr)
     else:
         raise ValueError(f"Invalid activity type: '{activity_type}', must be one of {[m.value for m in ActivityType.__members__.values()]}")
-    act.start(aid)
+    if start:
+        act.start(aid)
     return act
 
 logger.success("Activities module loaded.")
