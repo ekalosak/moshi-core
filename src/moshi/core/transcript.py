@@ -38,7 +38,7 @@ def a2int(audio_name: str) -> int:
 class Transcript(VersionedModel):
     activity_id: str
     language: str
-    messages: list[Message] = []
+    messages: dict[str, Message] = {}
     transcript_id: str = None
     user_id: str = None
 
@@ -58,7 +58,9 @@ class Transcript(VersionedModel):
     def add_msg(self, msg: Message):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
-            self.messages.append(msg)
+            key = f"{msg.role.name}-{len(self.messages)}"
+            logger.debug(f"Adding message to transcript: {key}: {msg}")
+            self.messages[key] = msg
             self.append_to_doc(msg)
 
     @traced

@@ -20,11 +20,6 @@ class AudioStorage(BaseModel):
     path: str
     bucket: str = None
 
-# class Translation(BaseModel):
-#     body: str
-#     language: str
-#     # audio: AudioStorage | None = None
-
 class Message(VersionedModel):
     role: Role
     body: str
