@@ -251,7 +251,9 @@ class BaseActivity(ABC, VersionedModel):
         finally:
             logger.trace(f"Removing temporary file: {ast_audio_file}")
             os.remove(ast_audio_file)
-        ast_msg = Message(role=Role.AST, body=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
+        msg = Message(role=Role.AST, body=ast_txt, audio={'path': ast_audio_storage_name, 'bucket': AUDIO_BUCKET})
+        logger.debug(f"Synthesized message: {msg}")
+        return msg
 
     @traced
     def respond(self, usr_audio_storage_name: str) -> str:
@@ -260,13 +262,14 @@ class BaseActivity(ABC, VersionedModel):
             The storage id for the character's response audio.
         """
         usr_msg = self._transcribe(usr_audio_storage_name)
-        logger.debug(f"Adding usr_msg to transcript ({self._transcript})")
+        logger.debug(f"Adding usr_msg to transcript: usr_msg={usr_msg}")
         self._transcript.add_msg(usr_msg)
         messages = self.prompt + self.messages
         logger.trace(f"Prompt + transcript have n messages: {len(messages)}")
         ast_txt = self._character.complete(messages)
         ast_audio_storage_name = audio.make_ast_audio_name(usr_audio_storage_name)
         ast_msg = self._synthesize(ast_txt, ast_audio_storage_name)
+        logger.debug(f"Adding ast_msg to transcript: ast_msg={ast_msg}")
         self._transcript.add_msg(ast_msg)
         logger.trace(f"Responded to: {usr_audio_storage_name}")
         return ast_audio_storage_name
