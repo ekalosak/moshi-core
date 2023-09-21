@@ -91,7 +91,7 @@ class BaseActivity(ABC, VersionedModel):
         try:
             # _transcript.messages is a dict, but we want a list
             # get values sorted by their created_at timestamp
-            return sorted(self._transcript.messages.values(), key=lambda m: m.created_at)
+            return sorted(self._transcript.messages.values(), key=lambda m: m.created_at.astimezone())
         except AttributeError:
             return None
 
