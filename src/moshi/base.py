@@ -2,12 +2,12 @@
 import datetime
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from moshi import __version__ as moshi_version
 
 class VersionedModel(BaseModel):
-    created_at: datetime.datetime = datetime.datetime.now()
+    created_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     moshi_version: str = moshi_version
 
 class Role(str, Enum):

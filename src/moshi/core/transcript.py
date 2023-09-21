@@ -57,7 +57,6 @@ class Transcript(VersionedModel):
         """Add a message to the transcript, saving it in Firestore."""
         with logger.contextualize(tid=self.tid, aid=self.aid):
             key = f"{msg.role.name}{len(self.messages)}"
-            logger.debug(f"Adding message to transcript: {key}: {msg}")
             self.messages[key] = msg
             self._append_to_doc(key)
 
