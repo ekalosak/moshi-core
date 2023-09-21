@@ -166,7 +166,6 @@ def transcribe(aud: str | bytes, bcp47: str) -> str:
             - Usually it's the emulator's mic being disabled...
     """
     with logger.contextualize(aud=aud if isinstance(aud, str) else 'bytes ommitted', bcp47=bcp47):
-        logger.debug("Transcription has no timeout.")
         if isinstance(aud, str):
             config = stt.RecognitionConfig(language_code=bcp47)
             audio = stt.RecognitionAudio(uri=aud)
@@ -180,8 +179,8 @@ def transcribe(aud: str | bytes, bcp47: str) -> str:
             audio = stt.RecognitionAudio(content=aud)
         else:
             raise TypeError(f"Invalid type for 'aud': {type(aud)}")
-        logger.debug(f"RecognitionConfig: {config}")
-        logger.debug(f"RecognitionAudio: {audio if isinstance(aud, str) else 'bytes ommitted'}")
+        logger.debug(f"RecognitionConfig: type(aud)={type(aud)} config={config}")
+        logger.debug(f"RecognitionAudio: {audio if isinstance(aud, str) else 'bytes: ommitted'}")
         response = sclient.recognize(config=config, audio=audio)
         logger.debug(f"response={response}")
         try:

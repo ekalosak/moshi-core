@@ -20,7 +20,7 @@ from moshi.utils.log import traced
 AUDIO_BUCKET = os.getenv("AUDIO_BUCKET", "moshi-3.appspot.com")  # NOTE default is emulator bucket
 logger.info(f"AUDIO_BUCKET={AUDIO_BUCKET}")
 
-storage_client = storage.Client()
+store = storage.Client()
 
 def energy(af: av.AudioFrame) -> float:
     """Calculate the RMS energy of an audio frame."""
@@ -102,7 +102,7 @@ def download(audio_path: str, tmp: str=None) -> str:
         afl = Path(audio_path)
         if tmp is None:
             _, tmp = tempfile.mkstemp(suffix=afl.suffix, prefix=afl.stem, dir='/tmp')
-        bucket = storage_client.bucket(AUDIO_BUCKET)
+        bucket = store.bucket(AUDIO_BUCKET)
         blob = bucket.blob(audio_path)
         logger.trace("Downloading bytes...")
         blob.download_to_filename(tmp)
@@ -118,7 +118,7 @@ def upload(file_path: Path, storage_path: Path, bucket_name: str=AUDIO_BUCKET):
     """
     with logger.contextualize(file_path=file_path, storage_path=storage_path, bucket=bucket_name):
         logger.trace("Creating objects...")
-        bucket = storage_client.bucket(bucket_name)
+        bucket = store.bucket(bucket_name)
         blob = bucket.blob(str(storage_path))
         logger.trace("Uploading bytes...")
         blob.upload_from_filename(str(file_path))

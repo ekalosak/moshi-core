@@ -80,5 +80,5 @@ class Transcript(VersionedModel):
             # messages is {"AST0": {Message}, "USR1": {Message}, ...}
             # or with any all caps AST, USR, SYS, etc.
             key = f"{msg.role.name}{len(self.messages) - 1}"
-            doc_ref.update({f"messages.{key}": payload}, )
+            doc_ref.update({f"messages.{key}": payload})
             logger.trace(f"[END] Saving conversation document.")
