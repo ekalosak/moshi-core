@@ -1,4 +1,4 @@
-.PHONY: auth build cycle dev publish publish-nobump publish-nobump-nobuild precheck
+.PHONY: auth auth-install build build-install bump dev-install pip-upgrade publish publish-nobump publish-nobump-nobuild precheck setup test-basic test
 # Source: https://web.mit.edu/gnu/doc/html/make_6.html
 
 GOOGLE_CLOUD_PYPI_URL = https://us-central1-python.pkg.dev/moshi-3/pypi/
@@ -26,6 +26,16 @@ bump:
 	./scripts/bump_version.sh
 	@echo "📈✅ Bumped."
 
+dev-install:
+	@echo "📦 Installing this package (moshi-py-fx)..."
+	PIP_NO_INPUT=1 pip install -e .[dev,test]
+	@echo "📦✅ Installed."
+
+pip-upgrade:
+	@echo "📦 Upgrading pip..."
+	PIP_NO_INPUT=1 pip install --upgrade pip
+	@echo "📦✅ Upgraded."
+
 publish: bump publish-nobump
 
 publish-nobump: build publish-nobump-nobuild
@@ -39,25 +49,24 @@ publish-nobump-nobuild:
 	@echo "📤✅ Published."
 
 precheck:
+	@echo "🧪 Checking preconditions..."
 	@python3 -c 'import sys; assert sys.version_info >= (3, 10), f"Python version >= 3.10 required, found {sys.version_info}"' \
         && echo "✅ Python 3 version >= 3.10" \
         || (echo "❌ Python 3 version < 3.10"; exit 1)
 	@pip --version >/dev/null 2>&1 \
         && echo "✅ Pip installed" \
         || (echo "❌ Pip not found"; exit 1)
-	@test -n "$GOOGLE_SDK_ROOT" \
-        && echo "✅ GOOGLE_SDK_ROOT present in env" \
-        || echo "❌ GOOGLE_SDK_ROOT missing in env"
+	@echo "🧪✅ Preconditions met."
 
-setup: auth-install build-install
+setup: precheck pip-upgrade auth-install build-install dev-install
 	@echo "🧰 Setup complete."
 
-test:
+test-basic:
 	@echo "🧪 Running tests..."
 	pytest -v --cov=moshi
 	@echo "🧪✅ Tests passed. Run `make test-cov` to view report."
 
-test-cov: test
+test: test-basic
 	@echo "📊 Showing test coverage report..."
 	coverage report --format=total
 	@echo "📊✅ Done."
