@@ -15,6 +15,7 @@ ENV = os.getenv("ENV", "prod")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")
 LOG_FORMAT = os.getenv("LOG_FORMAT", "json")  # either json or anything else
 LOG_COLORIZE = int(os.getenv("LOG_COLORIZE", 0))
+LOG_COLORIZE = (ENV == "dev" or LOG_COLORIZE or LOG_FORMAT == "rich")
 logger.info(f"ENV={ENV} LOG_LEVEL={LOG_LEVEL} LOG_FORMAT={LOG_FORMAT} LOG_COLORIZE={LOG_COLORIZE}")
 if ENV == "dev":
     logger.warning("Running in dev mode. Logs will be verbose and include sensitive diagnostic data.")
@@ -40,10 +41,7 @@ def _gcp_log_severity_map(level: str) -> str:
         case "SUCCESS":
             return "INFO"
         case "TRACE":
-            if ENV == "dev":
-                return "DEBUG"
-            else:
-                return "INFO"
+            return "DEBUG"
         case _:
             return level
 
@@ -88,7 +86,7 @@ def _toGCPFormat(rec: loguru._handler.Message) -> str:
 
 def setup_loguru(fmt=LOG_FORMAT, sink=print):
     logger.debug("Adding stdout logger...")
-    colorize = ENV == "dev" or LOG_COLORIZE or fmt == "rich"
+    colorize = LOG_COLORIZE
     diagnose = ENV == "dev"
     if fmt == "json":
         logger.debug("Using JSON formatter...")

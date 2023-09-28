@@ -25,6 +25,8 @@ dependencies = [
   "google-cloud-translate",
   "google-cloud-texttospeech",
   "google-cloud-secret-manager",
+  "isocodes",
+  "iso639",
   "loguru",
   "pydantic",
   "numpy",
